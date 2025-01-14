@@ -52,7 +52,7 @@
                 z-index: 2;
             }
             #logo-container img {
-                max-width: 100px;
+                max-width: 150px;
                 height: auto;
             }
             #loader {
@@ -150,42 +150,53 @@
             document.getElementById('toggle-overlay').addEventListener('click', () => {
                 document.getElementById('overlay').classList.toggle('collapsed');
             });
-
+        
             document.getElementById('send_prompt').addEventListener('click', async () => {
                 const prompt = document.getElementById('chatbox').value;
                 const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
-
-                const response = await fetch('/api/openai/chat/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({ prompt })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    updateInputs(data.parameters);
-                } else {
-                    console.error('Error fetching OpenAI response:', await response.text());
+        
+                try {
+                    const response = await fetch('/api/openai/chat/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ prompt })
+                    });
+        
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateInputs(data.parameters); // Directly update inputs with the received parameters
+                    } else {
+                        console.error('Error fetching OpenAI response:', await response.text());
+                    }
+                } catch (error) {
+                    console.error('Error during fetch:', error);
                 }
             });
-
-            function updateInputs(parameters) {
-                Object.keys(parameters).forEach(key => {
-                    const inputElement = document.getElementById(key);
-                    if (inputElement) {
-                        inputElement.value = parameters[key];
-                    }
-                });
-            }
-
+        
             function getCSRFToken() {
                 const name = 'csrftoken';
                 const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
                 return cookieValue ? cookieValue.pop() : '';
             }
+
+            function updateInputs(parameters) {
+            // Loop through parameters and update corresponding input fields
+            Object.keys(parameters).forEach(key => {
+                const inputElement = document.getElementById(key); // Ensure IDs match backend keys
+                if (inputElement) {
+                    inputElement.value = parameters[key]; // Update input value directly
+                }
+            });
+
+            // Trigger compute after updating inputs
+            onSliderChange();
+            }
+
+
         </script>
+        
     </body>
 </html>

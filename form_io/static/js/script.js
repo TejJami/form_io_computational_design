@@ -369,8 +369,4 @@ function onWindowResize() {
   animate()
 }
 
-function getCSRFToken() {
-  const name = 'csrftoken'
-  const cookieValue = document.cookie.match('(^|[^;]+)\\s*' + name + '\\s*=\\s*([^;]+)')
-  return cookieValue ? cookieValue.pop() : ''
-}
+window.onSliderChange = onSliderChange
