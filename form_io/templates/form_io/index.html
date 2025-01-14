@@ -1,0 +1,96 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Spiky Thing</title>
+        <style>
+            body { margin: 0; }
+            canvas { width: 100%; height: 100%; }
+            input {width: 90%;}
+            #container {position: relative;}
+            #container canvas, #overlay { position: absolute;}
+            #overlay {z-index: 1; width: 100%}
+
+            #loader {
+                border: 5px solid #f3f3f3; /* Light grey */
+                border-top: 5px solid #3d3d3d; /* Grey */
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                z-index: 2;
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="loader"></div> 
+        <div id="container">
+            <div id="overlay">
+                <div>
+                    <label for="podium_length">Podium Length</label>
+                    <input type="number" id="podium_length" name="podium_length" value="100000" step="1">
+                </div>
+                <div>
+                    <label for="podium_width">Podium Width</label>
+                    <input type="number" id="podium_width" name="podium_width" value="50000" step="1">
+                </div>
+                <div>
+                    <label for="podium_no_of_floors">Podium Number of Floors</label>
+                    <input type="number" id="podium_no_of_floors" name="podium_no_of_floors" value="15" step="1">
+                </div>
+                <div>
+                    <label for="floor_height">Floor Height</label>
+                    <input type="number" id="floor_height" name="floor_height" value="3500" step="1">
+                </div>
+                <div>
+                    <label for="building_type">Building Type</label>
+                    <input type="number" id="building_type" name="building_type" value="0" step="1">
+                </div>
+                <div>
+                    <label for="tower_num_floors">Tower Number of Floors</label>
+                    <input type="number" id="tower_num_floors" name="tower_num_floors" value="15" step="1">
+                </div>
+                <div>
+                    <label for="courtyard_offset_1">Courtyard Offset 1</label>
+                    <input type="number" id="courtyard_offset_1" name="courtyard_offset_1" value="21560" step="1">
+                </div>
+                <div>
+                    <label for="courtyard_offset_2">Courtyard Offset 2</label>
+                    <input type="number" id="courtyard_offset_2" name="courtyard_offset_2" value="2500" step="1">
+                </div>
+                <div>
+                    <label for="polyline_offset">Polyline Offset</label>
+                    <input type="number" id="polyline_offset" name="polyline_offset" value="10000" step="1">
+                </div>
+            </div>
+        </div>
+        
+
+        <!-- Import maps polyfill -->
+        <!-- Remove this when import maps will be widely supported -->
+        <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+
+        <script type="importmap">
+            {
+              "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js",
+                "three/examples/jsm/loaders/3DMLoader": "https://unpkg.com/three@0.158.0/examples/jsm/loaders/3DMLoader.js",
+                "rhino3dm":"https://unpkg.com/rhino3dm@8.0.0-beta3/rhino3dm.module.js"
+              }
+            }
+        </script>
+
+        <script type="module" src="{% static 'js/script.js' %}"></script>
+
+    </body>
+</html>
