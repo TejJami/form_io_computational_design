@@ -71,8 +71,17 @@ from openai import OpenAI
 
 import json
 
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Access the API key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
+
 # Initialize the OpenAI client
-client = OpenAI(api_key="your_openai_api_key")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 @csrf_exempt
 def chat_with_openai(request):
