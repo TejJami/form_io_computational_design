@@ -63,3 +63,48 @@ def solve_grasshopper(request):
             return JsonResponse({"success": False, "error": str(e)}, status=500)
 
     return JsonResponse({"success": False, "error": "Only POST method allowed."})
+
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from openai import OpenAI
+
+import json
+
+# Initialize the OpenAI client
+client = OpenAI(api_key="your_openai_api_key")
+
+@csrf_exempt
+def chat_with_openai(request):
+    if request.method == 'POST':
+        try:
+            # Parse the request body for the prompt
+            data = json.loads(request.body)
+            prompt = data.get('prompt', '')
+
+            if not prompt:
+                return JsonResponse({"error": "No prompt provided"}, status=400)
+
+            # Call the OpenAI API
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "Act as an expert in parametric design."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=800,
+            )
+
+            # Extract the content and parse as JSON if applicable
+            gpt_output = response["choices"][0]["message"]["content"]
+            try:
+                response_json = json.loads(gpt_output)  # Validate JSON response from OpenAI
+            except json.JSONDecodeError:
+                return JsonResponse({"error": "Invalid JSON format in OpenAI response."}, status=500)
+
+            return JsonResponse(response_json)
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=400)
