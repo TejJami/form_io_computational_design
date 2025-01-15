@@ -187,12 +187,18 @@ def chat_with_openai(request):
 
 def parse_openai_response(raw_response):
     """
-    Parses the OpenAI JSON response to extract parameters.
+    Parses the OpenAI JSON response to extract parameters and reasoning.
     """
     try:
-        parsed_response = json.loads(raw_response)  # Parse the JSON string
-        parameters = parsed_response.get("parameters", {})  # Extract "parameters"
-        return parameters  # Return the extracted parameters
+        # Parse the JSON string
+        parsed_response = json.loads(raw_response)
+
+        # Extract "parameters" and "reasoning"
+        parameters = parsed_response.get("parameters", {})
+        reasoning = parsed_response.get("reasoning", "")
+
+        # Return both as a dictionary
+        return {"parameters": parameters, "reasoning": reasoning}
     except json.JSONDecodeError as e:
         print(f"Error parsing OpenAI JSON response: {e}")
         return {"error": "Invalid JSON format in OpenAI response."}

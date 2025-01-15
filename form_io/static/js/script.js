@@ -256,7 +256,7 @@ function collectResults(responseJson) {
             const edges = new THREE.EdgesGeometry(threeMesh.geometry);
             const line = new THREE.LineSegments(
               edges,
-              new THREE.LineBasicMaterial({ color: 0x979797, linewidth: 2 })
+              new THREE.LineBasicMaterial({ color: 0xD9D9D9 , linewidth: 3 })
             );
             line.material.depthTest = false;
             line.material.depthWrite = false;

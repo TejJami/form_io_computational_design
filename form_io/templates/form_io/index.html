@@ -71,17 +71,44 @@
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
             }
-            .fixed-chatbox {
+            .chat-box {
                 position: fixed;
-                bottom: 16px;
-                right: 16px;
+                bottom: 0;
+                right: 10px;
+                max-height: 400px;
+                width: 300px;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                background-color: #fff;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
                 z-index: 1000;
-                max-width: 300px;
-                width: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
             }
-            .fixed-chatbox .card {
-                box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+
+            #chat-messages {
+                flex-grow: 1; /* Takes up available space */
+                overflow-y: auto; /* Enables vertical scrolling */
+                margin-bottom: 10px;
+                padding-right: 5px;
+                max-height: 300px; /* Optional: Constrain max height */
             }
+
+            .chat-input {
+                display: flex;
+                flex-direction: row;
+                gap: 5px;
+                margin-top: 10px;
+            }
+
+            .chat-input textarea {
+                flex-grow: 1;
+                resize: none;
+            }
+
+
         </style>
     </head>
     <body>
@@ -138,63 +165,116 @@
             </div>
         </div>
 
-        <div class="fixed-chatbox">
-            <div class="card bg-base-200 shadow-xl p-4">
-                <textarea id="chatbox" class="textarea textarea-bordered w-full mb-2" rows="3" placeholder="Enter your prompt"></textarea>
-                <button id="send_prompt" class="btn btn-primary w-full">Send</button>
+        <div id="chat-box" class="chat-box">
+            <div id="chat-messages">
+                <!-- Chat messages will be appended here -->
+            </div>
+            <div class="chat-input">
+                <textarea id="chatbox" class="textarea textarea-bordered" placeholder="Type your prompt here..."></textarea>
+                <button id="send_prompt" class="btn btn-primary">Send</button>
             </div>
         </div>
+        
+          
 
         <script type="module" src="{% static 'js/script.js' %}"></script>
         <script>
-            document.getElementById('toggle-overlay').addEventListener('click', () => {
-                document.getElementById('overlay').classList.toggle('collapsed');
-            });
-        
-            document.getElementById('send_prompt').addEventListener('click', async () => {
-                const prompt = document.getElementById('chatbox').value;
-                const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
-        
-                try {
-                    const response = await fetch('/api/openai/chat/', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: JSON.stringify({ prompt })
+                document.getElementById('toggle-overlay').addEventListener('click', () => {
+                    document.getElementById('overlay').classList.toggle('collapsed');
+                });
+
+                function updateInputs(parameters) {
+                // Loop through parameters and update corresponding input fields
+                    Object.keys(parameters).forEach(key => {
+                        const inputElement = document.getElementById(key); // Ensure IDs match backend keys
+                        if (inputElement) {
+                            inputElement.value = parameters[key]; // Update input value directly
+                        }
                     });
-        
-                    if (response.ok) {
-                        const data = await response.json();
-                        updateInputs(data.parameters); // Directly update inputs with the received parameters
-                    } else {
-                        console.error('Error fetching OpenAI response:', await response.text());
+
+                    // Trigger compute after updating inputs
+                    onSliderChange();
                     }
-                } catch (error) {
-                    console.error('Error during fetch:', error);
+
+                document.getElementById('send_prompt').addEventListener('click', async () => {
+                    const chatbox = document.getElementById('chatbox');
+                    const prompt = chatbox.value.trim();
+
+                    if (!prompt) return; // Prevent empty submissions
+
+                    // Add user prompt as chat-start bubble
+                    addChatMessage(prompt, false);
+
+                    // Clear the textarea
+                    chatbox.value = '';
+
+                    try {
+                        const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
+
+                        const response = await fetch('/api/openai/chat/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken
+                            },
+                            body: JSON.stringify({ prompt })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+
+                            // Debugging: Check the received data in the console
+                            console.log("Response JSON:", data);
+                            console.log("Response Reasoning:", data.parameters.reasoning);
+                            console.log("Response Parameters:", data.parameters.parameters);
+
+                            // Check and add reasoning from the response as chat-end bubble
+                            if (data.parameters.reasoning) {
+                                addChatMessage(data.parameters.reasoning, true);
+
+                            } else {
+                                addChatMessage('Error: No reasoning found in the response.', true);
+                            }
+
+                            // Call updateInputs to update form fields with parameters from the response
+                            if (data.parameters) {
+                                updateInputs(data.parameters.parameters);
+                            }
+                        } else {
+                            addChatMessage('Error: Unable to process the prompt.', true);
+                        }
+                    } catch (error) {
+                        console.error('Error during fetch:', error);
+                        addChatMessage('Error: Unable to reach the server.', true);
+                    }
+                });
+
+                function getCSRFToken() {
+                    const name = 'csrftoken';
+                    const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+                    return cookieValue ? cookieValue.pop() : '';
                 }
-            });
-        
-            function getCSRFToken() {
-                const name = 'csrftoken';
-                const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-                return cookieValue ? cookieValue.pop() : '';
-            }
 
-            function updateInputs(parameters) {
-            // Loop through parameters and update corresponding input fields
-            Object.keys(parameters).forEach(key => {
-                const inputElement = document.getElementById(key); // Ensure IDs match backend keys
-                if (inputElement) {
-                    inputElement.value = parameters[key]; // Update input value directly
+                // Function to append a chat message dynamically
+                function addChatMessage(message, isResponse = false) {
+                    const chatMessages = document.getElementById('chat-messages');
+
+                    // Create chat container
+                    const chat = document.createElement('div');
+                    chat.className = `chat ${isResponse ? 'chat-start' : 'chat-end'}`;
+
+                    // Create chat bubble
+                    const chatBubble = document.createElement('div');
+                    chatBubble.className = 'chat-bubble';
+                    chatBubble.innerHTML = message;
+
+                    // Append bubble to chat and chat to chat messages container
+                    chat.appendChild(chatBubble);
+                    chatMessages.appendChild(chat);
+
+                    // Scroll to the bottom of the chat box
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
-            });
-
-            // Trigger compute after updating inputs
-            onSliderChange();
-            }
-
 
         </script>
         
