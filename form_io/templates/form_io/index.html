@@ -183,6 +183,29 @@
 
         <script type="module" src="{% static 'js/script.js' %}"></script>
         <script>
+            // Loader messages and logic
+                let loaderInterval;
+                const loaderMessages = ["Talking to OpenAI...", "Analyzing prompt", "Loading model"];
+                let currentLoaderIndex = 0;
+
+                function showLoader() {
+                    const loader = document.getElementById('loader');
+                    loader.style.display = 'block';
+                    loader.textContent = loaderMessages[currentLoaderIndex]; // Set initial message
+                    loaderInterval = setInterval(() => {
+                        currentLoaderIndex = (currentLoaderIndex + 1) % loaderMessages.length;
+                        loader.textContent = loaderMessages[currentLoaderIndex]; // Cycle through messages
+                    }, 1000); // Change message every 1 second
+                }
+
+                function hideLoader() {
+                    const loader = document.getElementById('loader');
+                    loader.style.display = 'none';
+                    clearInterval(loaderInterval);
+                    currentLoaderIndex = 0; // Reset index
+                }
+
+
                 document.getElementById('toggle-overlay').addEventListener('click', () => {
                     document.getElementById('overlay').classList.toggle('collapsed');
                 });
@@ -200,59 +223,63 @@
                     onSliderChange();
                     }
 
-                document.getElementById('send_prompt').addEventListener('click', async () => {
-                    const chatbox = document.getElementById('chatbox');
-                    const prompt = chatbox.value.trim();
+                    document.getElementById('send_prompt').addEventListener('click', async () => {
+                        const chatbox = document.getElementById('chatbox');
+                        const prompt = chatbox.value.trim();
 
-                    if (!prompt) return; // Prevent empty submissions
+                        if (!prompt) return; // Prevent empty submissions
 
-                    // Add user prompt as chat-start bubble
-                    addChatMessage(prompt, false);
+                        // Add user prompt as chat-start bubble
+                        addChatMessage(prompt, false);
 
-                    // Clear the textarea
-                    chatbox.value = '';
+                        // Clear the textarea
+                        chatbox.value = '';
 
-                    try {
-                        const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
+                        // Show the loader
+                        showLoader();
 
-                        const response = await fetch('/api/openai/chat/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': csrfToken
-                            },
-                            body: JSON.stringify({ prompt })
-                        });
+                        try {
+                            const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
 
-                        if (response.ok) {
-                            const data = await response.json();
+                            const response = await fetch('/api/openai/chat/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': csrfToken
+                                },
+                                body: JSON.stringify({ prompt })
+                            });
 
-                            // Debugging: Check the received data in the console
-                            console.log("Response JSON:", data);
-                            console.log("Response Reasoning:", data.parameters.reasoning);
-                            console.log("Response Parameters:", data.parameters.parameters);
+                            if (response.ok) {
+                                const data = await response.json();
 
-                            // Check and add reasoning from the response as chat-end bubble
-                            if (data.parameters.reasoning) {
-                                addChatMessage(data.parameters.reasoning, true);
+                                // Debugging: Check the received data in the console
+                                console.log("Response JSON:", data);
+                                console.log("Response Reasoning:", data.parameters.reasoning);
+                                console.log("Response Parameters:", data.parameters.parameters);
 
+                                // Check and add reasoning from the response as chat-end bubble
+                                if (data.parameters.reasoning) {
+                                    addChatMessage(data.parameters.reasoning, true);
+                                } else {
+                                    addChatMessage('Error: No reasoning found in the response.', true);
+                                }
+
+                                // Call updateInputs to update form fields with parameters from the response
+                                if (data.parameters) {
+                                    updateInputs(data.parameters.parameters);
+                                }
                             } else {
-                                addChatMessage('Error: No reasoning found in the response.', true);
+                                addChatMessage('Error: Unable to process the prompt.', true);
                             }
-
-                            // Call updateInputs to update form fields with parameters from the response
-                            if (data.parameters) {
-                                updateInputs(data.parameters.parameters);
-                            }
-                        } else {
-                            addChatMessage('Error: Unable to process the prompt.', true);
+                        } catch (error) {
+                            console.error('Error during fetch:', error);
+                            addChatMessage('Error: Unable to reach the server.', true);
+                        } finally {
+                            // Hide the loader
+                            hideLoader();
                         }
-                    } catch (error) {
-                        console.error('Error during fetch:', error);
-                        addChatMessage('Error: Unable to reach the server.', true);
-                    }
-                });
-
+                    });
                 function getCSRFToken() {
                     const name = 'csrftoken';
                     const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
