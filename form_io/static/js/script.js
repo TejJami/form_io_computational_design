@@ -79,7 +79,7 @@ function getInputs() {
     courtyard_offset: Number(document.getElementById('courtyard_offset_1').value),
     staggered_offset: Number(document.getElementById('courtyard_offset_2').value),
     polyline_offset: Number(document.getElementById('polyline_offset').value),
-    detail_mode:Number(document.getElementById('detail_mode').checked ? '0' : '1')
+    detail_mode:Number(document.getElementById('detail_mode').checked ? '1' : '0')
   };
 
   return inputs;
