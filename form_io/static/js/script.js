@@ -9,7 +9,7 @@ const loader = new Rhino3dmLoader()
 loader.setLibraryPath( 'https://unpkg.com/rhino3dm@8.0.0-beta3/' )
 
 const data = {
-  definition: 'form_io_main_001.gh',
+  definition: 'form_io_main_002.gh',
   inputs: getInputs()
 }
 
@@ -51,6 +51,10 @@ const polyline_offset_input = document.getElementById('polyline_offset');
 polyline_offset_input.addEventListener('mouseup', onSliderChange, false);
 polyline_offset_input.addEventListener('touchend', onSliderChange, false);
 
+const detail_mode_input = document.getElementById('detail_mode');
+detail_mode_input.addEventListener('mouseup', onSliderChange, false);
+detail_mode_input.addEventListener('touchend', onSliderChange, false);
+
 // load the rhino3dm library
 let doc
 
@@ -74,7 +78,8 @@ function getInputs() {
     tower_num_floors: Number(document.getElementById('tower_num_floors').value),
     courtyard_offset: Number(document.getElementById('courtyard_offset_1').value),
     staggered_offset: Number(document.getElementById('courtyard_offset_2').value),
-    polyline_offset: Number(document.getElementById('polyline_offset').value)
+    polyline_offset: Number(document.getElementById('polyline_offset').value),
+    detail_mode:Number(document.getElementById('detail_mode').checked ? '0' : '1')
   };
 
   return inputs;
