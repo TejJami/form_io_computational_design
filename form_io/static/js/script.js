@@ -323,43 +323,86 @@ function onSliderChange () {
 
 var scene, camera, renderer, controls
 
+// function init () {
+//   // Rhino models are z-up, so set this as the default
+//   THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
+
+//   scene = new THREE.Scene()
+//   scene.background = new THREE.Color('#eeeeee');
+
+//   const aspect = window.innerWidth / window.innerHeight;
+//   const frustumSize = 2000; // Adjusted for better model fitting
+
+//   camera = new THREE.OrthographicCamera(
+//     (frustumSize * aspect) / -2,
+//     (frustumSize * aspect) / 2,
+//     frustumSize / 2,
+//     frustumSize / -2,
+//     1,
+//     2500000  // Far clipping plane adjusted for model depth
+//   );
+
+//   // Position the camera for a better view
+//   camera.position.set(1000000, 1000000, 1000000); // Adjusted to have a clearer view of the model from an angle
+//   camera.lookAt(new THREE.Vector3(0, 0, 0)); // Center on the origin
+
+//   renderer = new THREE.WebGLRenderer({ antialias: true });
+//   renderer.setPixelRatio(window.devicePixelRatio);
+//   renderer.setSize(window.innerWidth, window.innerHeight);
+//   document.body.appendChild(renderer.domElement);
+
+//   controls = new OrbitControls(camera, renderer.domElement);
+//   controls.enableZoom = true;
+//   controls.enablePan = true;
+
+
+//   window.addEventListener( 'resize', onWindowResize, false )
+
+//   animate()
+// }
+
 function init () {
   // Rhino models are z-up, so set this as the default
   THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
 
-  scene = new THREE.Scene()
+  scene = new THREE.Scene();
   scene.background = new THREE.Color('#eeeeee');
 
   const aspect = window.innerWidth / window.innerHeight;
-  const frustumSize = 2000; // Adjusted for better model fitting
 
-  camera = new THREE.OrthographicCamera(
-    (frustumSize * aspect) / -2,
-    (frustumSize * aspect) / 2,
-    frustumSize / 2,
-    frustumSize / -2,
-    1,
-    2500000  // Far clipping plane adjusted for model depth
-  );
+  // === Perspective Camera Parameters ===
+  const fov = 45; // Field of view (adjustable)
+  const near = 1;
+  const far = 2500000; // Same as original
 
-  // Position the camera for a better view
-  camera.position.set(1000000, 1000000, 1000000); // Adjusted to have a clearer view of the model from an angle
-  camera.lookAt(new THREE.Vector3(0, 0, 0)); // Center on the origin
+  // Create the PerspectiveCamera
+  camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
+  // Position the camera diagonally above the model
+  camera.position.set(1000000, 1000000, 1000000);
+
+  // Look at the model center
+  camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+  // === Renderer Setup ===
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
+  // === Controls ===
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableZoom = true;
   controls.enablePan = true;
+  controls.zoomSpeed = 0.3; // Smooth, slower zoom
 
+  // === Resize Handler ===
+  window.addEventListener('resize', onWindowResize, false);
 
-  window.addEventListener( 'resize', onWindowResize, false )
-
-  animate()
+  // Start render loop
+  animate();
 }
+
 
 function animate () {
   requestAnimationFrame( animate )
@@ -375,3 +418,127 @@ function onWindowResize() {
 }
 
 window.onSliderChange = onSliderChange
+
+// Loader messages and logic
+                let loaderInterval;
+                const loaderMessages = ["Talking to OpenAI...", "Analyzing prompt", "Loading model"];
+                let currentLoaderIndex = 0;
+
+                function showLoader() {
+                    const loader = document.getElementById('loader');
+                    loader.style.display = 'block';
+                    loader.textContent = loaderMessages[currentLoaderIndex]; // Set initial message
+                    loaderInterval = setInterval(() => {
+                        currentLoaderIndex = (currentLoaderIndex + 1) % loaderMessages.length;
+                        loader.textContent = loaderMessages[currentLoaderIndex]; // Cycle through messages
+                    }, 1000); // Change message every 1 second
+                }
+
+                function hideLoader() {
+                    const loader = document.getElementById('loader');
+                    loader.style.display = 'none';
+                    clearInterval(loaderInterval);
+                    currentLoaderIndex = 0; // Reset index
+                }
+
+
+                document.getElementById('toggle-overlay').addEventListener('click', () => {
+                    document.getElementById('overlay').classList.toggle('collapsed');
+                });
+
+                function updateInputs(parameters) {
+                // Loop through parameters and update corresponding input fields
+                    Object.keys(parameters).forEach(key => {
+                        const inputElement = document.getElementById(key); // Ensure IDs match backend keys
+                        if (inputElement) {
+                            inputElement.value = parameters[key]; // Update input value directly
+                        }
+                    });
+
+                    // Trigger compute after updating inputs
+                    onSliderChange();
+                    }
+
+                    document.getElementById('send_prompt').addEventListener('click', async () => {
+                        const chatbox = document.getElementById('chatbox');
+                        const prompt = chatbox.value.trim();
+
+                        if (!prompt) return; // Prevent empty submissions
+
+                        // Add user prompt as chat-start bubble
+                        addChatMessage(prompt, false);
+
+                        // Clear the textarea
+                        chatbox.value = '';
+
+                        // Show the loader
+                        showLoader();
+
+                        try {
+                            const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
+
+                            const response = await fetch('/api/openai/chat/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': csrfToken
+                                },
+                                body: JSON.stringify({ prompt })
+                            });
+
+                            if (response.ok) {
+                                const data = await response.json();
+
+                                // Debugging: Check the received data in the console
+                                console.log("Response JSON:", data);
+                                console.log("Response Reasoning:", data.parameters.reasoning);
+                                console.log("Response Parameters:", data.parameters.parameters);
+
+                                // Check and add reasoning from the response as chat-end bubble
+                                if (data.parameters.reasoning) {
+                                    addChatMessage(data.parameters.reasoning, true);
+                                } else {
+                                    addChatMessage('Error: No reasoning found in the response.', true);
+                                }
+
+                                // Call updateInputs to update form fields with parameters from the response
+                                if (data.parameters) {
+                                    updateInputs(data.parameters.parameters);
+                                }
+                            } else {
+                                addChatMessage('Error: Unable to process the prompt.', true);
+                            }
+                        } catch (error) {
+                            console.error('Error during fetch:', error);
+                            addChatMessage('Error: Unable to reach the server.', true);
+                        } finally {
+                            // Hide the loader
+                            hideLoader();
+                        }
+                    });
+                function getCSRFToken() {
+                    const name = 'csrftoken';
+                    const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+                    return cookieValue ? cookieValue.pop() : '';
+                }
+
+                // Function to append a chat message dynamically
+                function addChatMessage(message, isResponse = false) {
+                    const chatMessages = document.getElementById('chat-messages');
+
+                    // Create chat container
+                    const chat = document.createElement('div');
+                    chat.className = `chat ${isResponse ? 'chat-start' : 'chat-end'}`;
+
+                    // Create chat bubble
+                    const chatBubble = document.createElement('div');
+                    chatBubble.className = 'chat-bubble';
+                    chatBubble.innerHTML = message;
+
+                    // Append bubble to chat and chat to chat messages container
+                    chat.appendChild(chatBubble);
+                    chatMessages.appendChild(chat);
+
+                    // Scroll to the bottom of the chat box
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
