@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404
 from openai import OpenAI
 from dotenv import load_dotenv
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +25,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 def index(request):
     return render(request, 'form_io/index.html')
 
+@csrf_exempt
 def solve_grasshopper(request):
     if request.method == "POST":
         try:
@@ -176,6 +178,7 @@ def chat_with_openai(request):
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
 
+@csrf_exempt
 def parse_openai_response(raw_response):
     """
     Parses the OpenAI JSON response to extract parameters and reasoning.
@@ -193,3 +196,47 @@ def parse_openai_response(raw_response):
     except json.JSONDecodeError as e:
         print(f"Error parsing OpenAI JSON response: {e}")
         return {"error": "Invalid JSON format in OpenAI response."}
+
+@csrf_exempt
+def get_grasshopper_params(request):
+    try:
+        gh_file_name = request.GET.get("file")
+        print(f"[INFO] Requested Grasshopper file: {gh_file_name}")
+
+        if not gh_file_name:
+            return JsonResponse({"error": "No file name provided"}, status=400)
+
+        gh_path = os.path.join(settings.GRASSHOPPER_FILES_DIR, gh_file_name)
+        if not os.path.exists(gh_path):
+            return JsonResponse({"error": "File not found"}, status=404)
+
+        with open(gh_path, "rb") as f:
+            gh_bytes = f.read()
+            encoded_gh = base64.b64encode(gh_bytes).decode("utf-8")
+
+        payload = {
+            "algo": encoded_gh,
+            "pointer": None
+        }
+
+        compute_url = os.getenv("RHINO_COMPUTE_URL", "http://localhost:6001")
+        post_url = f"{compute_url}/io"
+
+        print(f"[INFO] Sending POST request to {post_url}")
+        headers = {"Content-Type": "application/json"}
+        response = requests.post(post_url, json=payload, headers=headers)
+
+        if response.status_code != 200:
+            print(f"[ERROR] Rhino Compute returned error: {response.status_code} - {response.text}")
+            return JsonResponse({"error": response.text}, status=response.status_code)
+
+        response_data = response.json()
+        print("[SUCCESS] Rhino Compute responded with:")
+        print(json.dumps(response_data, indent=2))
+
+        return JsonResponse(response_data)
+
+    except Exception as e:
+        print("[EXCEPTION] An error occurred during get_grasshopper_inputs:")
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
