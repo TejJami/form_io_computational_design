@@ -9,7 +9,17 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404
+from openai import OpenAI
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Access the API key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
+
+# Initialize the OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def index(request):
     return render(request, 'form_io/index.html')
@@ -63,24 +73,6 @@ def solve_grasshopper(request):
             return JsonResponse({"success": False, "error": str(e)}, status=500)
 
     return JsonResponse({"success": False, "error": "Only POST method allowed."})
-
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from openai import OpenAI
-
-import json
-from dotenv import load_dotenv
-import os
-
-# Load environment variables
-load_dotenv()
-
-# Access the API key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
-
-# Initialize the OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 @csrf_exempt
 def chat_with_openai(request):
@@ -183,7 +175,6 @@ def chat_with_openai(request):
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
-
 
 def parse_openai_response(raw_response):
     """
