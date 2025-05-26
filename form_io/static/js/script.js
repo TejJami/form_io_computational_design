@@ -542,3 +542,62 @@ window.onSliderChange = onSliderChange
                     // Scroll to the bottom of the chat box
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
+
+
+// ========== Project-Based Enhancements ========== //
+
+// Ensure global project constants are set in the HTML (index.html must inject these!)
+const PROJECT_ID = typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : null;
+const PROJECT_INPUTS = typeof PROJECT_INPUTS !== 'undefined' ? PROJECT_INPUTS : {};
+
+// Preload input values on page load
+function preloadInputs(savedInputs) {
+  if (!savedInputs || typeof savedInputs !== 'object') return;
+
+  Object.entries(savedInputs).forEach(([key, value]) => {
+    const element = document.getElementById(key);
+    if (!element) return;
+
+    if (element.type === 'checkbox') {
+      element.checked = Boolean(value);
+    } else {
+      element.value = value;
+    }
+  });
+
+  console.log('[Form IO] Preloaded saved inputs for project:', PROJECT_ID);
+}
+
+// Save inputs to the backend (called after changes)
+async function saveInputsToProject(inputs) {
+  if (!PROJECT_ID) return;
+
+  try {
+    await fetch(`/api/projects/${PROJECT_ID}/save/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCSRFToken(),
+      },
+      body: JSON.stringify(inputs),
+    });
+    console.log('[Form IO] Inputs saved successfully for project:', PROJECT_ID);
+  } catch (error) {
+    console.warn('[Form IO] Failed to save inputs:', error);
+  }
+}
+
+
+// Dynamically attach events to all inputs in overlay
+function registerInputListeners() {
+  document.querySelectorAll('#overlay input').forEach(input => {
+    input.addEventListener('mouseup', onSliderChange, false);
+    input.addEventListener('touchend', onSliderChange, false);
+  });
+}
+
+// On load, initialize inputs
+document.addEventListener('DOMContentLoaded', () => {
+  preloadInputs(PROJECT_INPUTS);
+  registerInputListeners();
+});

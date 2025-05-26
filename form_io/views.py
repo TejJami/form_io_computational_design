@@ -240,3 +240,76 @@ def get_grasshopper_params(request):
         print("[EXCEPTION] An error occurred during get_grasshopper_inputs:")
         traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
+
+
+from .models import Project
+from django.views.decorators.http import require_POST
+# load mapbox token from .env file
+load_dotenv()
+mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
+
+
+def project_list(request):
+    projects = Project.objects.all().order_by("-created_at")
+    mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
+    if not mapbox_token:
+        print("Warning: MAPBOX_PUBLIC_TOKEN is not set in settings.")
+    return render(request, "form_io/project_list.html", {
+        "projects": projects,
+        "mapbox_token": mapbox_token,
+    })
+
+@require_POST
+def create_project(request):
+    name = request.POST.get("name", "").strip()
+    thumbnail = request.FILES.get("thumbnail")
+    if name:
+        project = Project.objects.create(name=name, thumbnail=thumbnail)
+        return redirect("project_detail", project_id=project.id)
+    return redirect("project_list")
+
+def project_detail(request, project_id):
+    project = get_object_or_404(Project, id=project_id)
+    return render(request, "form_io/index.html", {"project": project})
+
+@csrf_exempt
+@require_POST
+def save_project_inputs(request, project_id):
+    project = get_object_or_404(Project, id=project_id)
+    try:
+        data = json.loads(request.body)
+        project.inputs = data
+        project.save()
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+import json
+from .models import Project
+
+@csrf_exempt
+@require_POST
+def api_create_project(request):
+    try:
+        data = json.loads(request.body)
+        name = data.get("name")
+        project_type = data.get("type")
+        location = data.get("location")
+        site_geometry = data.get("site_geometry")
+
+        if not name or not site_geometry:
+            return JsonResponse({"error": "Missing name or site geometry"}, status=400)
+
+        project = Project.objects.create(
+            name=name,
+            type=project_type,
+            location=location,
+            site_geometry=site_geometry,
+        )
+        return JsonResponse({"success": True, "project_id": project.id})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

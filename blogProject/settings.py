@@ -124,3 +124,9 @@ RHINO_COMPUTE_API_KEY = ""
 
 # Path to the Grasshopper files directory
 GRASSHOPPER_FILES_DIR = os.path.join(BASE_DIR, "grasshopper_files")
+
+# settings.py
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+MAPBOX_PUBLIC_TOKEN = os.getenv('MAPBOX_PUBLIC_TOKEN')

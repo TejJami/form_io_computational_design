@@ -1,19 +1,179 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width">
-    <link rel="stylesheet" href="{% static 'css/output.css' %}">
-    <script type="module" src="{% static 'js/script.js' %}"></script>
-    <title>{% block title %}Form IO{% endblock title %}</title>
-    <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/favicon-16x16.png' %}">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Form IO{% endblock %}</title>
+
+    <!-- Tailwind + DaisyUI + Font -->
+    <link href="{% static 'css/output.css' %}" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
+<!-- Mapbox Core -->
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+<!-- Mapbox Draw -->
+<link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.2/mapbox-gl-draw.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.2/mapbox-gl-draw.js"></script>
+
+<!-- Load the `mapbox-gl-geocoder` plugin. -->
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css" type="text/css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/favicon-16x16.png' %}" />
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet" type="text/css" />
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                    "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js",
+                    "three/examples/jsm/loaders/3DMLoader": "https://unpkg.com/three@0.158.0/examples/jsm/loaders/3DMLoader.js",
+                    "rhino3dm": "https://unpkg.com/rhino3dm@8.0.0-beta3/rhino3dm.module.js"
+                }
+            }
+    </script>
+    <style>
+            #container { position: relative; }
+            #container canvas, #overlay { position: absolute; }
+            #overlay {
+                pointer-events: auto;
+                z-index: 1;
+                width: 18%;
+                height: 100vh;
+                overflow-y: auto;
+                background-color: #f9f9f9;
+                padding: 10px;
+                padding-top: 70px;
+                box-sizing: border-box;
+                transition: transform 0.3s ease;
+            }
+            #overlay.collapsed {
+                transform: translateX(-100%);
+            }
+            #toggle-overlay {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                z-index: 2;
+                background-color: #f9f9f9;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 5px 10px;
+                cursor: pointer;
+            }
+            #logo-container {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 2;
+            }
+            #logo-container img {
+                max-width: 150px;
+                height: auto;
+            }
+            #loader {
+                border: 5px solid #f3f3f3; /* Light grey */
+                border-top: 5px solid #3d3d3d; /* Grey */
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                z-index: 2;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .chat-box {
+                position: fixed;
+                bottom: 0;
+                right: 10px;
+                max-height: 400px;
+                width: 300px;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                background-color: #fff;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+            }
+
+            #chat-messages {
+                flex-grow: 1; /* Takes up available space */
+                overflow-y: auto; /* Enables vertical scrolling */
+                margin-bottom: 10px;
+                padding-right: 5px;
+                max-height: 300px; /* Optional: Constrain max height */
+            }
+
+            .chat-input {
+                display: flex;
+                flex-direction: row;
+                gap: 5px;
+                margin-top: 10px;
+            }
+
+            .chat-input textarea {
+                flex-grow: 1;
+                resize: none;
+            }
+
+
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <main>
-        {% block main %}
-        {% endblock main %}
+<body class="bg-base-200 text-base-content">
+
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-sm">
+        <div class="navbar-start">
+            <!-- <div class="dropdown">
+                <button tabindex="0" class="btn btn-ghost btn-circle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+                    </svg>
+                </button>
+                <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-52 p-2 shadow">
+                    <li><a href="{% url 'project_list' %}">Projects</a></li>
+                    <li><a>Portfolio</a></li>
+                    <li><a>About</a></li>
+                </ul>
+            </div> -->
+        </div>
+        <div class="navbar-center">
+            <a href="{% url 'project_list' %}" class="btn btn-ghost text-xl">
+                <img src="{% static 'images/logo.png' %}" alt="Form IO" class="h-8 w-auto" />
+            </a>
+        </div>
+        <div class="navbar-end">
+            <button class="btn btn-ghost btn-circle">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Page Content -->
+    <main class="min-h-screen">
+        {% block main %}{% endblock %}
     </main>
+
 </body>
 </html>
