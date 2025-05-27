@@ -1,4 +1,10 @@
+{% extends "form_io/base.html" %}
+
 {% load static %}
+{% block title %}selected Projects{% endblock %}
+
+{% block main %}
+
 <!DOCTYPE html>
 <html>
     <head>
@@ -16,6 +22,14 @@
                 }
             }
         </script>
+        <script>
+            const PROJECT_ID = {{ project.id }};
+            const PROJECT_INPUTS = {{ project_inputs|safe }};
+            const PROJECT_SITE = {{ project_site|safe }};
+            console.log("PROJECT_SITE:", PROJECT_SITE);
+            const PROJECT_POLYLINE = {{ project_polyline|safe }};
+        </script>
+
         <style>
             #container { position: relative; }
             #container canvas, #overlay { position: absolute; }
@@ -113,10 +127,11 @@
     </head>
     <body>
         <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
-        
+        <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
+
+
         <div id="container" class="relative">
             <div id="logo-container">
-                <img src="{% static 'images/logo.png' %}" alt="Logo">
                 <input
                 type="checkbox"
                 class="toggle border-blue-500 bg-blue-500 [--tglbg:yellow] hover:bg-blue-700 "
@@ -181,7 +196,14 @@
         <script type="module" src="{% static 'js/script.js' %}"></script>
     </body>
 </html>
+<script>
+  mapboxgl.accessToken = "{{ mapbox_token|safe }}";
+  console.log("Mapbox token:", mapboxgl.accessToken);
+</script>
+
+{% endblock %}
 
 {% block extra_scripts %}
     <script type="module" src="{% static 'js/script.js' %}"></script>
 {% endblock %}
+

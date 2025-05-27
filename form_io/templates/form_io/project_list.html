@@ -9,7 +9,7 @@
 
 <!-- Modal -->
 <dialog id="createProjectModal" class="modal">
-  <div class="modal-box bg-base-100 text-base-content w-full max-w-3xl relative p-6">
+  <div class="modal-box bg-base-100 text-base-content w-full max-w-6xl relative p-6">
 
 <!-- Aligned Top Bar -->
 <div class="flex items-center justify-between mb-6">
@@ -74,23 +74,45 @@
 
 
 
-<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-    {% for project in projects %}
-    <a href="{% url 'project_detail' project.id %}" class="card bg-base-100 shadow hover:shadow-lg transition">
-        {% if project.thumbnail %}
-        <figure><img src="{{ project.thumbnail.url }}" alt="{{ project.name }}" class="w-full h-40 object-cover" /></figure>
-        {% else %}
-        <figure><div class="bg-gray-200 h-40 flex items-center justify-center text-gray-500">No Image</div></figure>
-        {% endif %}
-        <div class="card-body">
-            <h2 class="card-title">{{ project.name }}</h2>
-            <p class="text-sm text-gray-500">Last edited: {{ project.created_at|date:"Y-m-d H:i" }}</p>
-        </div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+  {% for project in projects %}
+  <div class="relative group">
+    
+    <!-- Delete Button (top-right) -->
+    <form method="POST" action="{% url 'delete_project' project.id %}" class="absolute top-2 right-2 z-10 hidden group-hover:block">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-circle btn-error shadow-md hover:scale-110 transition" title="Delete project">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </form>
+
+    <!-- Card -->
+    <a href="{% url 'project_detail' project.id %}" class="card bg-base-100 shadow-lg hover:shadow-xl transition-transform transform hover:-translate-y-1 duration-200 overflow-hidden">
+
+      {% if project.thumbnail %}
+      <figure class="h-40 bg-neutral">
+        <img src="{{ project.thumbnail.url }}" alt="{{ project.name }}" class="object-cover w-full h-full" />
+      </figure>
+      {% else %}
+      <figure class="h-40 bg-base-200 flex items-center justify-center text-gray-500">
+        <span>No Image</span>
+      </figure>
+      {% endif %}
+
+      <div class="card-body p-4">
+        <h2 class="card-title text-lg font-semibold">{{ project.name }}</h2>
+        <p class="text-sm text-gray-500 mt-1">Last edited: {{ project.created_at|date:"Y-m-d H:i" }}</p>
+      </div>
+
     </a>
-    {% empty %}
+  </div>
+  {% empty %}
     <p>No projects yet. Create one above!</p>
-    {% endfor %}
+  {% endfor %}
 </div>
+
 
 
 <!-- Modal Script -->

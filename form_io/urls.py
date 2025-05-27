@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/rhino/params/', views.get_grasshopper_params, name='get_grasshopper_params'),
     path('api/projects/<int:project_id>/save/', views.save_project_inputs, name='save_project_inputs'),
     path('api/projects/create/', views.api_create_project, name='api_create_project'),
+    path('projects/<int:project_id>/delete/', views.delete_project, name='delete_project'),
 
 
 ]

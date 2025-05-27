@@ -10,8 +10,9 @@ class Project(models.Model):
 
     name = models.CharField(max_length=255, unique=True)
     type = models.CharField(max_length=50, choices=PROJECT_TYPES, default='residential')
-    location = models.CharField(max_length=255, blank=True)
+    relative_location = models.JSONField(default=dict, blank=True) 
     site_geometry = models.JSONField(default=dict, blank=True)  # stores drawn polygon/line
+    building_path = models.JSONField(default=dict, blank=True)  # new field to store ordered polyline points
 
     inputs = models.JSONField(default=dict, blank=True)
     thumbnail = models.ImageField(upload_to='project_thumbnails/', null=True, blank=True)

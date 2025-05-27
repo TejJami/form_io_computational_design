@@ -246,8 +246,6 @@ from .models import Project
 from django.views.decorators.http import require_POST
 # load mapbox token from .env file
 load_dotenv()
-mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
-
 
 def project_list(request):
     projects = Project.objects.all().order_by("-created_at")
@@ -270,7 +268,17 @@ def create_project(request):
 
 def project_detail(request, project_id):
     project = get_object_or_404(Project, id=project_id)
-    return render(request, "form_io/index.html", {"project": project})
+    mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
+    if not mapbox_token:
+        print("Warning: MAPBOX_PUBLIC_TOKEN is not set in settings.")
+            
+    return render(request, "form_io/index.html", {
+        "project": project,
+        "project_inputs": json.dumps(project.inputs),
+        "project_site": json.dumps(project.site_geometry),
+        "project_polyline": json.dumps(project.building_path),
+        "mapbox_token": mapbox_token,
+    })
 
 @csrf_exempt
 @require_POST
@@ -313,3 +321,12 @@ def api_create_project(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+from django.views.decorators.http import require_POST
+from django.shortcuts import redirect
+
+@require_POST
+def delete_project(request, project_id):
+    project = get_object_or_404(Project, id=project_id)
+    project.delete()
+    return redirect('project_list')
