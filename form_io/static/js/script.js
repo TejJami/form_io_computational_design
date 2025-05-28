@@ -8,7 +8,7 @@ loader.setLibraryPath('https://unpkg.com/rhino3dm@8.0.0-beta3/')
 
 const data = {
   definition: 'form_io_main_002.gh',
-  inputs: getInputs()
+  inputs: {}  // initialize as empty
 }
 
 // Rhino library instance
@@ -23,22 +23,23 @@ let meshb64Mesh, meshoutMesh
 init()
 
 function getInputs() {
-  return {
-    podium_lenght: Number(document.getElementById('podium_length').value),
-    podium_width: Number(document.getElementById('podium_width').value),
-    podium_no_of_floors: Number(document.getElementById('podium_no_of_floors').value),
-    floor_height: Number(document.getElementById('floor_height').value),
-    building_type: Number(document.getElementById('building_type').value),
-    tower_num_floors: Number(document.getElementById('tower_num_floors').value),
-    courtyard_offset: Number(document.getElementById('courtyard_offset_1').value),
-    staggered_offset: Number(document.getElementById('courtyard_offset_2').value),
-    polyline_offset: Number(document.getElementById('polyline_offset').value),
-    detail_mode: Number(document.getElementById('detail_mode').checked ? '1' : '0')
-  }
+  const inputs = {};
+  document.querySelectorAll('#overlay input').forEach(input => {
+    const id = input.id;
+    if (input.type === 'checkbox') {
+      inputs[id] = input.checked ? 1 : 0;
+    } else {
+      inputs[id] = Number(input.value);
+    }
+  });
+  return inputs;
 }
+
 
 async function compute() {
   if (!threeScene) return
+
+
   data.inputs = getInputs()
 
   const formData = new FormData()
@@ -66,7 +67,7 @@ function meshToThreejs(mesh) {
   const geometry = loader.parse(mesh.toThreejsJSON())
 
   // Scale down from mm to meters
-  geometry.scale(0.0000000001, 0.0000000001, 0.0000000001)
+  geometry.scale(0.00000005, 0.00000005,0.00000005)
   
 
   const material = new THREE.MeshBasicMaterial({
@@ -145,6 +146,8 @@ function collectResults(json) {
 
 function init() {
   const siteBounds = getBoundsFromSiteGeometry(PROJECT_SITE)
+  const paddedBounds = getPaddedBounds(siteBounds.bounds); 
+
   map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/light-v11',
@@ -152,7 +155,8 @@ function init() {
     zoom: 16,
     pitch: 60,
     bearing: -17.6,
-    antialias: true
+    antialias: true,
+    maxbouns: paddedBounds
   })
 
   map.on('load', () => {
@@ -163,9 +167,10 @@ function init() {
       source: 'site',
       paint: {
         'fill-color': '#3b82f6',
-        'fill-opacity': 0.4
+        'fill-opacity': 0.1
       }
     })
+
 
     map.addLayer({
       id: '3d-buildings',
@@ -182,6 +187,14 @@ function init() {
       }
     })
 
+    // Hide all street labels and text layers
+    map.getStyle().layers.forEach((layer) => {
+      if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+      }
+    });
+
+
     map.fitBounds(siteBounds.bounds, { padding: 30, duration: 0 })
     map.addLayer(customLayer)
   })
@@ -191,7 +204,7 @@ const customLayer = {
   id: 'rhino-layer',
   type: 'custom',
   renderingMode: '3d',
-  onAdd: function (_map, gl) {
+  onAdd: async function (_map, gl) {
     threeCamera = new THREE.Camera()
     threeScene = new THREE.Scene()
     threeRenderer = new THREE.WebGLRenderer({
@@ -201,8 +214,13 @@ const customLayer = {
     })
     threeRenderer.autoClear = false
 
-    compute()
+    // ✅ Wait for input UI to be ready before computing
+    await fetchGrasshopperInputs(data.definition);
+    registerInputListeners(); // Attach events to newly created input elements
+    preloadInputs(PROJECT_INPUTS); // Optional: load saved input values if available
+    compute(); // Now inputs are ready and UI is populated
   },
+
   render: function (gl, matrix) {
     const m = new THREE.Matrix4().fromArray(matrix)
     threeCamera.projectionMatrix = m
@@ -210,6 +228,16 @@ const customLayer = {
     threeRenderer.render(threeScene, threeCamera)
     map.triggerRepaint()
   }
+}
+
+function getPaddedBounds(bounds, paddingDegrees = 0.001) {
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+
+  const paddedSw = new mapboxgl.LngLat(sw.lng - paddingDegrees, sw.lat - paddingDegrees);
+  const paddedNe = new mapboxgl.LngLat(ne.lng + paddingDegrees, ne.lat + paddingDegrees);
+
+  return new mapboxgl.LngLatBounds(paddedSw, paddedNe);
 }
 
 function getBoundsFromSiteGeometry(geojson) {
@@ -247,9 +275,7 @@ function hideLoader() {
     clearInterval(loaderInterval);
     currentLoaderIndex = 0; // Reset index
 }
-document.getElementById('toggle-overlay').addEventListener('click', () => {
-    document.getElementById('overlay').classList.toggle('collapsed');
-});
+
 function updateInputs(parameters) {
 // Loop through parameters and update corresponding input fields
     Object.keys(parameters).forEach(key => {
@@ -367,6 +393,10 @@ async function saveInputsToProject(inputs) {
   }
 }
 
+function onSliderChange() {
+  console.log('[Form IO] Slider/input changed – recomputing...');
+  compute();
+}
 
 // Dynamically attach events to all inputs in overlay
 function registerInputListeners() {
@@ -376,8 +406,116 @@ function registerInputListeners() {
   });
 }
 
-// On load, initialize inputs
-document.addEventListener('DOMContentLoaded', () => {
-  preloadInputs(PROJECT_INPUTS);
+
+async function fetchGrasshopperInputs(definitionFile) {
+  try {
+    console.log("definition",definitionFile)
+    const response = await fetch(`/api/rhino/params/?file=${encodeURIComponent(definitionFile)}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch inputs: ${response.statusText}`);
+    }
+    const data = await response.json();
+    console.log("inputs",data)
+    // Extract the parameter names from response (assuming same schema as Rhino Compute)
+    const inputs = extractInputsFromGrasshopperData(data);
+    populateInputsUI(inputs);
+
+  } catch (error) {
+    console.error("Error fetching GH params:", error);
+  }
+}
+
+function extractInputsFromGrasshopperData(data) {
+  const inputs = [];
+
+  if (data && Array.isArray(data.InputNames) && Array.isArray(data.Inputs)) {
+    for (let i = 0; i < data.InputNames.length; i++) {
+      const inputName = data.InputNames[i];
+      const inputMeta = data.Inputs[i];
+
+      let defaultValue = 0;
+      if (
+        inputMeta &&
+        inputMeta.Default &&
+        inputMeta.Default.InnerTree &&
+        inputMeta.Default.InnerTree["{0}"] &&
+        inputMeta.Default.InnerTree["{0}"][0]
+      ) {
+        defaultValue = inputMeta.Default.InnerTree["{0}"][0].data;
+      }
+
+      // Determine input type fallback logic
+      let type = "number";
+      const paramType = inputMeta?.ParamType?.toLowerCase();
+      if (paramType === "integer") {
+        type = "number";
+      } else if (paramType === "boolean") {
+        type = "checkbox";
+      }
+
+      inputs.push({
+        name: inputName,
+        default: defaultValue,
+        type: type
+      });
+    }
+  }
+
+  return inputs;
+}
+
+
+
+function populateInputsUI(inputs) {
+  console.log(inputs)
+  const overlay = document.getElementById('overlay');
+
+  // Clear current input form
+  overlay.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.classList.add('p-4', 'bg-base-200');
+
+  const grid = document.createElement('div');
+  grid.classList.add('grid', 'grid-cols-1', 'gap-4');
+
+  inputs.forEach(input => {
+    const control = document.createElement('div');
+    control.classList.add('form-control');
+
+    const label = document.createElement('label');
+    label.classList.add('label');
+    label.textContent = input.name;
+
+    const inputField = document.createElement('input');
+    inputField.type = input.type;
+    inputField.id = input.name;
+    inputField.name = input.name;
+    inputField.value = input.default;
+    inputField.classList.add('input', 'input-bordered');
+
+    control.appendChild(label);
+    control.appendChild(inputField);
+    grid.appendChild(control);
+  });
+
+  form.appendChild(grid);
+  overlay.appendChild(form);
+
+  // Re-register listeners
   registerInputListeners();
+
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  preloadInputs(PROJECT_INPUTS);  // okay if these exist
+  registerInputListeners();       // not harmful, but won't bind to anything yet
+
+  // ✅ Load GH UI and compute when ready
+  await fetchGrasshopperInputs(data.definition); 
+});
+
+// Ensure the compute function is bound to the button click
+document.getElementById('toggle-overlay').addEventListener('click', () => {
+  document.getElementById('overlay').classList.toggle('hidden');
 });

@@ -12,8 +12,10 @@ from django.shortcuts import get_object_or_404
 from openai import OpenAI
 from dotenv import load_dotenv
 import traceback
+from .models import Project
+from django.views.decorators.http import require_POST
 
-# Load environment variables
+# load mapbox token from .env file
 load_dotenv()
 
 # Access the API key
@@ -231,21 +233,13 @@ def get_grasshopper_params(request):
             return JsonResponse({"error": response.text}, status=response.status_code)
 
         response_data = response.json()
-        print("[SUCCESS] Rhino Compute responded with:")
-        print(json.dumps(response_data, indent=2))
 
         return JsonResponse(response_data)
-
+        print("Calling for input data")
     except Exception as e:
         print("[EXCEPTION] An error occurred during get_grasshopper_inputs:")
         traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
-
-
-from .models import Project
-from django.views.decorators.http import require_POST
-# load mapbox token from .env file
-load_dotenv()
 
 def project_list(request):
     projects = Project.objects.all().order_by("-created_at")
@@ -256,15 +250,6 @@ def project_list(request):
         "projects": projects,
         "mapbox_token": mapbox_token,
     })
-
-@require_POST
-def create_project(request):
-    name = request.POST.get("name", "").strip()
-    thumbnail = request.FILES.get("thumbnail")
-    if name:
-        project = Project.objects.create(name=name, thumbnail=thumbnail)
-        return redirect("project_detail", project_id=project.id)
-    return redirect("project_list")
 
 def project_detail(request, project_id):
     project = get_object_or_404(Project, id=project_id)
@@ -292,12 +277,6 @@ def save_project_inputs(request, project_id):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse
-import json
-from .models import Project
-
 @csrf_exempt
 @require_POST
 def api_create_project(request):
@@ -305,7 +284,7 @@ def api_create_project(request):
         data = json.loads(request.body)
         name = data.get("name")
         project_type = data.get("type")
-        location = data.get("location")
+        # location = data.get("location")
         site_geometry = data.get("site_geometry")
 
         if not name or not site_geometry:
@@ -314,16 +293,13 @@ def api_create_project(request):
         project = Project.objects.create(
             name=name,
             type=project_type,
-            location=location,
+            # location=location,
             site_geometry=site_geometry,
         )
         return JsonResponse({"success": True, "project_id": project.id})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
-from django.views.decorators.http import require_POST
-from django.shortcuts import redirect
 
 @require_POST
 def delete_project(request, project_id):
