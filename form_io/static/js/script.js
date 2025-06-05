@@ -7,7 +7,9 @@ const loader = new Rhino3dmLoader()
 loader.setLibraryPath('https://unpkg.com/rhino3dm@8.0.0-beta3/')
 
 const data = {
-  definition: 'form_io_main_002.gh',
+  // definition: 'form_io_main_002.gh',
+  definition: 'test_main.gh',
+
   inputs: {}  // initialize as empty
 }
 
@@ -144,9 +146,15 @@ function collectResults(json) {
   })
 }
 
+// Global variables for site and building polygons
+let sitePolygonId = null;
+let buildingPolygonId = null;
+let siteLabelMarkers = [];
+let buildingLabelMarkers = [];
+
 function init() {
-  const siteBounds = getBoundsFromSiteGeometry(PROJECT_SITE)
-  const paddedBounds = getPaddedBounds(siteBounds.bounds); 
+  const siteBounds = getBoundsFromSiteGeometry(PROJECT_SITE);
+  const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
   map = new mapboxgl.Map({
     container: 'map',
@@ -156,22 +164,81 @@ function init() {
     pitch: 60,
     bearing: -17.6,
     antialias: true,
-    maxbouns: paddedBounds
-  })
+    maxBounds: paddedBounds
+  });
+
+  // Initialize MapboxDraw
+  const draw = new MapboxDraw({
+    displayControlsDefault: false,
+    controls: {
+      polygon: true,
+      trash: true
+    },
+    defaultMode: 'draw_polygon'
+  });
+  map.addControl(draw, 'top-right');
+
+  // Draw Rectangle Button
+  const drawRectangleBtn = document.createElement('button');
+  drawRectangleBtn.innerText = "Draw Rectangle";
+  drawRectangleBtn.className = 'btn btn-primary m-2';
+  drawRectangleBtn.onclick = () => draw.changeMode('draw_polygon');
+  document.getElementById('overlay').prepend(drawRectangleBtn);
 
   map.on('load', () => {
-    map.addSource('site', { type: 'geojson', data: PROJECT_SITE })
-    map.addLayer({
-      id: 'site-boundary',
-      type: 'fill',
-      source: 'site',
-      paint: {
-        'fill-color': '#3b82f6',
-        'fill-opacity': 0.1
-      }
-    })
+    // Site layer and polygon
+    if (PROJECT_SITE?.features?.length) {
+      const siteFeature = PROJECT_SITE.features[0];
+      siteFeature.properties = { role: 'site' };
 
+      map.addSource('site', {
+        type: 'geojson',
+        data: PROJECT_SITE
+      });
 
+      map.addLayer({
+        id: 'site-boundary',
+        type: 'fill',
+        source: 'site',
+        paint: {
+          'fill-color': '#3b82f6',
+          'fill-opacity': 0.1
+        }
+      });
+
+      const addedSite = draw.add(siteFeature);
+      sitePolygonId = addedSite[0];
+      clearSiteLabels();
+      showSiteBoundaryDimensions(siteFeature);
+    }
+
+    // Building layer and polygon
+    const buildingFeature = buildingPathToGeoJSON(PROJECT_POLYLINE);
+    if (buildingFeature) {
+      buildingFeature.properties = { role: 'building' };
+
+      map.addSource('building', {
+        type: 'geojson',
+        data: buildingFeature
+      });
+
+      map.addLayer({
+        id: 'building-boundary',
+        type: 'fill',
+        source: 'building',
+        paint: {
+          'fill-color': '#f97316',
+          'fill-opacity': 0.5
+        }
+      });
+
+      const addedBuilding = draw.add(buildingFeature);
+      buildingPolygonId = addedBuilding[0];
+      clearBuildingLabels();
+      showBuildingPathDimensions(buildingFeature.geometry);
+    }
+
+    // 3D buildings
     map.addLayer({
       id: '3d-buildings',
       source: 'composite',
@@ -185,20 +252,91 @@ function init() {
         'fill-extrusion-base': ['get', 'min_height'],
         'fill-extrusion-opacity': 0.5
       }
-    })
+    });
 
-    // Hide all street labels and text layers
-    map.getStyle().layers.forEach((layer) => {
+    // Hide street labels
+    map.getStyle().layers.forEach(layer => {
       if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
       }
     });
 
+    map.fitBounds(siteBounds.bounds, { padding: 30, duration: 0 });
+    map.addLayer(customLayer);
+  });
 
-    map.fitBounds(siteBounds.bounds, { padding: 30, duration: 0 })
-    map.addLayer(customLayer)
-  })
+  // Create handler
+  map.on('draw.create', function (e) {
+    const feature = e.features[0];
+    if (!feature || feature.geometry.type !== 'Polygon') return;
+
+    const role = feature.properties?.role || null;
+
+    if (role === 'site') {
+      sitePolygonId = feature.id;
+      saveSiteGeometry(feature.geometry);
+      clearSiteLabels();
+      showSiteBoundaryDimensions(feature);
+    } else {
+      buildingPolygonId = feature.id;
+      handleBuildingPath(feature.geometry);
+      updateBuildingSource(feature.geometry);
+      clearBuildingLabels();
+      showBuildingPathDimensions(feature.geometry);
+    }
+  });
+
+  // Update handler
+  map.on('draw.update', function (e) {
+    const feature = e.features[0];
+    const role = feature.properties?.role;
+
+    if (role === 'site') {
+      saveSiteGeometry(feature.geometry);
+      clearSiteLabels();
+      showSiteBoundaryDimensions(feature);
+    } else if (role === 'building') {
+      handleBuildingPath(feature.geometry);
+      updateBuildingSource(feature.geometry);
+      clearBuildingLabels();
+      showBuildingPathDimensions(feature.geometry);
+    }
+  });
+
+  // Delete handler
+  map.on('draw.delete', function (e) {
+    e.features.forEach(f => {
+      if (f.id === sitePolygonId) {
+        sitePolygonId = null;
+        clearSiteLabels();
+        console.warn('[Form IO] Site boundary deleted');
+      } else if (f.id === buildingPolygonId) {
+        buildingPolygonId = null;
+        clearBuildingLabels();
+        console.warn('[Form IO] Building path deleted');
+      }
+    });
+  });
+
+  // Helper: update building geojson source
+  function updateBuildingSource(geometry) {
+    const updatedFeature = {
+      type: "Feature",
+      geometry: geometry,
+      properties: { role: "building" }
+    };
+    const updatedGeojson = {
+      type: "FeatureCollection",
+      features: [updatedFeature]
+    };
+    const buildingSource = map.getSource('building');
+    if (buildingSource) {
+      buildingSource.setData(updatedGeojson);
+    }
+  }
 }
+
+
 
 const customLayer = {
   id: 'rhino-layer',
@@ -230,6 +368,123 @@ const customLayer = {
   }
 }
 
+
+function buildingPathToGeoJSON(path) {
+  if (!path || !path.origin || !Array.isArray(path.points)) return null;
+
+  const coords = path.points.map(p => [p.x + path.origin.x, p.y + path.origin.y]);
+
+  // Ensure closed polygon
+  const first = coords[0], last = coords[coords.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first);
+
+  // Convert Mercator to LngLat
+  const lngLatCoords = coords.map(pair => {
+    const merc = new mapboxgl.MercatorCoordinate(pair[0], pair[1]);
+    const { lng, lat } = merc.toLngLat();
+    return [lng, lat];
+  });
+
+
+  return {
+    type: "Feature",
+    geometry: {
+      type: "Polygon",
+      coordinates: [lngLatCoords]
+    }
+  };
+}
+
+
+function saveSiteGeometry(geometry) {
+  if (!PROJECT_ID) return;
+
+  const geojson = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: geometry,
+        properties: {}
+      }
+    ]
+  };
+
+  const payload = {
+    inputs: getInputs(),  // keep if needed
+    site_geometry: geojson
+  };
+
+  fetch(`/api/projects/${PROJECT_ID}/save/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCSRFToken()
+    },
+    body: JSON.stringify(payload)
+  }).then(res => {
+    if (!res.ok) throw new Error('Site geometry save failed');
+    console.log('[Form IO] Site boundary updated successfully');
+  }).catch(err => {
+    console.error('[Form IO] Failed to save site boundary:', err);
+  });
+}
+
+
+
+function handleBuildingPath(geometry) {
+  const coords = geometry.coordinates[0];
+  const originLngLat = coords[0];
+
+  const origin = mapboxgl.MercatorCoordinate.fromLngLat({
+    lng: originLngLat[0],
+    lat: originLngLat[1]
+  });
+
+  const points = coords.map(([lng, lat]) => {
+    const point = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
+    return {
+      x: point.x - origin.x,
+      y: point.y - origin.y,
+      z: 0
+    };
+  });
+
+  const relativePath = {
+    origin: { x: origin.x, y: origin.y, z: 0 },
+    points: points
+  };
+
+  saveBuildingPath(relativePath);  // POST to your backend
+}
+
+
+
+
+function saveBuildingPath(buildingPath) {
+  if (!PROJECT_ID) return;
+
+  const payload = {
+    inputs: getInputs(),
+    building_path: buildingPath
+  };
+
+  fetch(`/api/projects/${PROJECT_ID}/save/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCSRFToken()
+    },
+    body: JSON.stringify(payload)
+  }).then(res => {
+    if (!res.ok) throw new Error('Save failed');
+    console.log('[Form IO]Updated succesfully');
+  }).catch(err => {
+    console.error('[Form IO] Failed to save rectangle:', err);
+  });
+}
+
+
 function getPaddedBounds(bounds, paddingDegrees = 0.001) {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
@@ -255,11 +510,11 @@ function getCSRFToken() {
 }
 
 
-
 // Loader messages and logic
 let loaderInterval;
 const loaderMessages = ["Talking to OpenAI...", "Analyzing prompt", "Loading model"];
 let currentLoaderIndex = 0;
+
 function showLoader() {
     const loader = document.getElementById('loader');
     loader.style.display = 'block';
@@ -269,6 +524,7 @@ function showLoader() {
         loader.textContent = loaderMessages[currentLoaderIndex]; // Cycle through messages
     }, 1000); // Change message every 1 second
 }
+
 function hideLoader() {
     const loader = document.getElementById('loader');
     loader.style.display = 'none';
@@ -277,7 +533,7 @@ function hideLoader() {
 }
 
 function updateInputs(parameters) {
-// Loop through parameters and update corresponding input fields
+    // Loop through parameters and update corresponding input fields
     Object.keys(parameters).forEach(key => {
         const inputElement = document.getElementById(key); // Ensure IDs match backend keys
         if (inputElement) {
@@ -287,6 +543,7 @@ function updateInputs(parameters) {
     // Trigger compute after updating inputs
     onSliderChange();
     }
+
     document.getElementById('send_prompt').addEventListener('click', async () => {
         const chatbox = document.getElementById('chatbox');
         const prompt = chatbox.value.trim();
@@ -352,9 +609,6 @@ function addChatMessage(message, isResponse = false) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Ensure global project constants are set in the HTML (index.html must inject these!)
-// const PROJECT_ID = typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : null;
-// const PROJECT_INPUTS = typeof PROJECT_INPUTS !== 'undefined' ? PROJECT_INPUTS : {};
 
 // Preload input values on page load
 function preloadInputs(savedInputs) {
@@ -464,8 +718,6 @@ function extractInputsFromGrasshopperData(data) {
   return inputs;
 }
 
-
-
 function populateInputsUI(inputs) {
   console.log(inputs)
   const overlay = document.getElementById('overlay');
@@ -519,3 +771,106 @@ document.addEventListener('DOMContentLoaded', async () => {
 document.getElementById('toggle-overlay').addEventListener('click', () => {
   document.getElementById('overlay').classList.toggle('hidden');
 });
+
+let labelMarkers = [];
+
+function styleLabel(el) {
+  el.style.padding = '2px 6px';
+  el.style.background = 'white';
+  el.style.borderRadius = '4px';
+  el.style.fontSize = '12px';
+  el.style.border = '1px solid #ccc';
+  el.style.boxShadow = '0 0 2px rgba(0, 0, 0, 0.2)';
+  el.style.pointerEvents = 'none';
+}
+
+function clearSiteLabels() {
+  siteLabelMarkers.forEach(m => m.remove());
+  siteLabelMarkers = [];
+}
+
+function showSiteBoundaryDimensions(feature) {
+  if (!feature || feature.geometry?.type !== 'Polygon') return;
+
+  // Clear previous edge length labels for the site boundary
+  clearSiteLabels();
+
+  const coords = feature.geometry.coordinates[0];
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+
+    const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
+    const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+
+    const el = document.createElement('div');
+    el.innerText = `${dist.toFixed(1)} m`;
+    styleLabel(el);
+
+    const marker = new mapboxgl.Marker(el)
+      .setLngLat(mid)
+      .addTo(map);
+
+    siteLabelMarkers.push(marker);
+  }
+
+  // Compute and display site area in the fixed UI element
+  const area = turf.area(feature);
+  const areaText = area > 10000
+    ? `${(area / 10000).toFixed(2)} ha`
+    : `${area.toFixed(1)} m²`;
+
+  const labelEl = document.getElementById('site-area-label');
+  if (labelEl) {
+    labelEl.innerText = `Site Area: ${areaText}`;
+  }
+}
+
+
+function clearBuildingLabels() {
+  buildingLabelMarkers.forEach(m => m.remove());
+  buildingLabelMarkers = [];
+}
+
+function showBuildingPathDimensions(geometry) {
+  if (!geometry || geometry.type !== 'Polygon') return;
+
+  clearBuildingLabels();
+
+  const coords = geometry.coordinates[0];
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+
+    const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
+    const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+
+    const el = document.createElement('div');
+    el.innerText = `${dist.toFixed(1)} m`;
+    styleLabel(el);
+
+    const marker = new mapboxgl.Marker(el)
+      .setLngLat(mid)
+      .addTo(map);
+
+    buildingLabelMarkers.push(marker);
+  }
+
+  // Set building area in UI
+  const area = turf.area(geometry);
+  const areaText = area > 10000
+    ? `${(area / 10000).toFixed(2)} ha`
+    : `${area.toFixed(1)} m²`;
+
+  const buildingLabelEl = document.getElementById('building-area-label');
+  if (buildingLabelEl) {
+    buildingLabelEl.innerText = `Building Area: ${areaText}`;
+  }
+}
+
+
+function clearAllLabels() {
+  labelMarkers.forEach(m => m.remove());
+  labelMarkers = [];
+}

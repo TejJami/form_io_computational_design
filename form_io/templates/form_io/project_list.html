@@ -3,183 +3,215 @@
 
 {% block main %}
 
-<!-- Modal trigger -->
-<button class="btn btn-primary mb-4" onclick="createProjectModal.showModal()">+ New Project</button>
 
+<!-- Header + Button -->
+<div class="flex items-center justify-between px-6 pt-6">
+  <h1 class="text-3xl font-extrathin text-base-content font-serif tracking-wide">Your Projects</h1>
+  <button class="btn btn-neutral btn-outline font-mono m-0" onclick="createProjectModal.showModal()">+ New Project</button>
+</div>
+
+<!-- Scrollable Card Container -->
+<div class="h-[calc(80vh-8rem)] overflow-y-auto px-6 py-6 mt-4 mb-6 bg-base-100">
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+    {% for project in projects %}
+    <div class="relative rounded-xl bg-base-100  hover:shadow-sm p-2 transition-transform hover:scale-[1.02]"
+        style="background-color: {{ project.color }};">
+
+      <!-- Dropdown Menu (Top-Right, DaisyUI Standard) -->
+      <div class="absolute top-0 right-0 z-50 dropdown dropdown-start">
+        <div tabindex="0" role="button" class="btn btn-xs btn-circle btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M6 12h.01M12 12h.01M18 12h.01"/>
+          </svg>
+        </div>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow w-28 text-xs">
+          <!-- Delete -->
+        <li>
+          <form method="POST" action="{% url 'delete_project' project.id %}">
+            {% csrf_token %}
+            <button class="text-red-500 w-full text-left">Delete</button>
+          </form>
+        </li>
+
+          <!-- Duplicate -->
+          <li><button>Duplicate</button></li>
+          <!-- Rename -->
+          <li><button>Rename</button></li>
+        </ul>
+      </div>
+
+
+      <!-- Card Content -->
+      <a href="{% url 'project_detail' project.id %}" class="block text-black p-2">
+        <div class="flex flex-col justify-between h-full min-h-[120px]">
+          <div>
+<h2 class="text-2xl font-extralight font-sans w-full block truncate capitalize" title="{{ project.name }}">
+  {{ project.name|slice:":16" }}{% if project.name|length > 18 %}…{% endif %}
+</h2>
+
+
+            <p class="text-sm font-thin mt-1 font-sans">{{ project.type|capfirst }}</p>
+          </div>
+          <p class="text-xs text-gray-700 mt-4">Last edited: {{ project.created_at|date:"Y-m-d H:i" }}</p>
+        </div>
+      </a>
+    </div>
+    {% empty %}
+      <p class="text-gray-500 col-span-full">No projects yet. Create one above!</p>
+    {% endfor %}
+  </div>
+</div>
 
 <!-- Modal -->
 <dialog id="createProjectModal" class="modal">
-  <div class="modal-box bg-base-100 text-base-content w-full max-w-6xl relative p-6">
+  
+  <!-- Step 1: Modal Box with Padding and Max Width -->
+  <div id="modal-step-1" class="modal-box bg-base-100 text-base-content w-full max-w-6xl relative p-6 rounded-lg">
 
-<!-- Aligned Top Bar -->
-<div class="flex items-center justify-between mb-6">
-  <!-- Left: Back Button -->
-  <div class="w-1/6">
-    <button id="backBtn" class="btn btn-circle btn-outline btn-sm hidden" onclick="backModalStep()">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-      </svg>
-    </button>
-  </div>
-
-  <!-- Center: Title -->
-  <div class="w-4/6 text-center">
-    <h3 class="text-xl font-semibold">Create New Project</h3>
-  </div>
-
-  <!-- Right: Close Button -->
-  <div class="w-1/6 flex justify-end">
-    <button class="btn btn-sm btn-circle btn-ghost" onclick="createProjectModal.close()">✕</button>
-  </div>
-</div>
-
-
-    <!-- Step 1 -->
-    <div id="modal-step-1">
-
-      <div class="form-control mb-4">
-        <label class="label">Project Name</label>
-        <input type="text" id="newProjectName" class="input input-bordered" required />
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div class="w-1/6"></div>
+      <div class="w-4/6 text-center">
+        <h3 class="text-xl font-thin">Create New Project</h3>
       </div>
-
-      <div class="form-control mb-4">
-        <label class="label">Project Type</label>
-        <select id="newProjectType" class="select select-bordered">
-          <option value="residential">Residential Project</option>
-          <option value="acoustic">Acoustic Project</option>
-          <option value="urban">Urban Planning Project</option>
-        </select>
-      </div>
-
-      <div class="flex justify-end">
-        <button class="btn btn-accent" onclick="nextModalStep()">Next</button>
+      <div class="w-1/6 flex justify-end">
+        <button class="btn btn-sm btn-circle btn-ghost" onclick="createProjectModal.close()">✕</button>
       </div>
     </div>
 
-    <!-- Step 2 -->
-    <div id="modal-step-2" style="display: none;">
+    <!-- Form Inputs -->
+    <div class="form-control mb-4">
+      <label class="label">Project Name</label>
+      <input type="text" id="newProjectName" class="input input-bordered" required />
+    </div>
 
-      <div class="mb-4">
-        <label class="label">Click once on the map to draw a 300m x 300m square</label>
-        <div id="map" class="w-full h-[400px] border rounded-md"></div>
+    <div class="form-control mb-4">
+      <label class="label">Project Type</label>
+      <select id="newProjectType" class="select select-bordered">
+        <option value="residential">Residential Project</option>
+        <option value="acoustic">Acoustic Project</option>
+        <option value="urban">Urban Planning Project</option>
+      </select>
+    </div>
+
+    <div class="flex justify-end">
+      <button class="btn btn-accent" onclick="nextModalStep()">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Fullscreen Width/Height -->
+  <div id="modal-step-2" style="display: none;" class="bg-base-100 text-base-content w-[80vw] h-[80vh] relative overflow-hidden">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 pt-6 pb-2">
+      <div>
+        <button id="backBtn" class="btn btn-circle btn-outline btn-sm" onclick="backModalStep()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
       </div>
-
+      <div class="text-center grow">
+        <h3 class="text-xl font-thin">Select Location</h3>
+      </div>
       <div class="flex justify-end">
+        <button class="btn btn-sm btn-circle btn-ghost" onclick="createProjectModal.close()">✕</button>
+      </div>
+    </div>
+
+    <!-- Map + Button -->
+    <div class="h-[calc(75vh-6rem)] px-6 pb-6">
+     
+<div class="text-xs text-gray-500 px-6 pt-2 font-thin">
+  Click the first point again to finish drawing site boundary.
+</div>
+
+      <div id="map" class="w-full h-full border rounded-md"></div>
+
+      <div class="flex justify-end mt-4">
         <button class="btn btn-primary" onclick="submitNewProject()">Create</button>
       </div>
     </div>
-
   </div>
+
 </dialog>
 
 
-
-<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-  {% for project in projects %}
-  <div class="relative group">
-    
-    <!-- Delete Button (top-right) -->
-    <form method="POST" action="{% url 'delete_project' project.id %}" class="absolute top-2 right-2 z-10 hidden group-hover:block">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-circle btn-error shadow-md hover:scale-110 transition" title="Delete project">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </form>
-
-    <!-- Card -->
-    <a href="{% url 'project_detail' project.id %}" class="card bg-base-100 shadow-lg hover:shadow-xl transition-transform transform hover:-translate-y-1 duration-200 overflow-hidden">
-
-      {% if project.thumbnail %}
-      <figure class="h-40 bg-neutral">
-        <img src="{{ project.thumbnail.url }}" alt="{{ project.name }}" class="object-cover w-full h-full" />
-      </figure>
-      {% else %}
-      <figure class="h-40 bg-base-200 flex items-center justify-center text-gray-500">
-        <span>No Image</span>
-      </figure>
-      {% endif %}
-
-      <div class="card-body p-4">
-        <h2 class="card-title text-lg font-semibold">{{ project.name }}</h2>
-        <p class="text-sm text-gray-500 mt-1">Last edited: {{ project.created_at|date:"Y-m-d H:i" }}</p>
-      </div>
-
-    </a>
-  </div>
-  {% empty %}
-    <p>No projects yet. Create one above!</p>
-  {% endfor %}
-</div>
-
-
-
-<!-- Modal Script -->
+<!-- JavaScript to Toggle Modal Padding -->
 <script>
-  mapboxgl.accessToken = '{{ mapbox_token }}'; // Django context variable
-
-  let map, draw;
-
 function nextModalStep() {
   document.getElementById("modal-step-1").style.display = "none";
   document.getElementById("modal-step-2").style.display = "block";
-  document.getElementById("backBtn").classList.remove("hidden");
   initializeMap();
 }
 
 function backModalStep() {
   document.getElementById("modal-step-2").style.display = "none";
   document.getElementById("modal-step-1").style.display = "block";
-  document.getElementById("backBtn").classList.add("hidden");
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("backBtn").classList.remove("hidden");
+});
 
 // Optional: Ensure backBtn is hidden on open
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("backBtn").classList.add("hidden");
 });
 
+</script>
+
+
+
+
+
+<script>
+  mapboxgl.accessToken = '{{ mapbox_token }}';
+
+  let map, draw;
+  let labelMarkers = [];
 
   function initializeMap() {
     if (map) return;
 
-map = new mapboxgl.Map({
-  container: 'map',
-  style: 'mapbox://styles/mapbox/streets-v11',
-  center: [13.405, 52.52], // Berlin
-  zoom: 16,
-  pitch: 60, // tilt camera
-  bearing: -17.6, // rotate for 3D perspective
-  antialias: true
-});
-
+    map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/light-v11',
+      center: [13.405, 52.52],
+      zoom: 16,
+      pitch: 60,
+      bearing: -17.6,
+      antialias: true
+    });
 
     draw = new MapboxDraw({
       displayControlsDefault: false,
-      controls: { trash: true }
+      controls: {
+        polygon: true,
+        trash: true
+      }
     });
 
     map.addControl(draw);
 
     map.on('load', () => {
-  map.addLayer({
-    id: '3d-buildings',
-    source: 'composite',
-    'source-layer': 'building',
-    filter: ['==', 'extrude', 'true'],
-    type: 'fill-extrusion',
-    minzoom: 15,
-    paint: {
-      'fill-extrusion-color': '#aaa',
-      'fill-extrusion-height': ['get', 'height'],
-      'fill-extrusion-base': ['get', 'min_height'],
-      'fill-extrusion-opacity': 0.6
-    }
-  });
-});
+      map.addLayer({
+        id: '3d-buildings',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', 'extrude', 'true'],
+        type: 'fill-extrusion',
+        minzoom: 15,
+        paint: {
+          'fill-extrusion-color': '#aaa',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 0.6
+        }
+      });
+    });
 
-
-    // Add Geocoder search control
     const geocoder = new MapboxGeocoder({
       accessToken: mapboxgl.accessToken,
       mapboxgl: mapboxgl,
@@ -193,48 +225,81 @@ map = new mapboxgl.Map({
       map.flyTo({ center: [lng, lat], zoom: 16 });
     });
 
-    // Click to draw a square
-    map.on('click', (e) => {
-      const lng = e.lngLat.lng;
-      const lat = e.lngLat.lat;
-      drawFixedSquare([lng, lat]);
-    });
+    // On draw complete
+map.on('draw.create', (e) => {
+  updateEdgeLabels();
+});
 
-    // Prevent multiple features
-    map.on('draw.create', () => {
-      const all = draw.getAll();
-      if (all.features.length > 1) {
-        const keep = all.features[all.features.length - 1];
-        draw.deleteAll();
-        draw.add(keep);
-      }
-    });
+
+    map.on('draw.update', updateEdgeLabels);
+    map.on('draw.selectionchange', updateEdgeLabels);
+    map.on('draw.delete', clearEdgeLabels);
   }
 
-  function drawFixedSquare(center) {
-    const sizeLat = 0.0027; // ~300m
-    const sizeLng = sizeLat / Math.cos(center[1] * Math.PI / 180); // correct for latitude
 
-    const halfLat = sizeLat / 2;
-    const halfLng = sizeLng / 2;
+  function updateEdgeLabels() {
+    clearEdgeLabels();
 
-    const square = {
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [[
-          [center[0] - halfLng, center[1] - halfLat],
-          [center[0] + halfLng, center[1] - halfLat],
-          [center[0] + halfLng, center[1] + halfLat],
-          [center[0] - halfLng, center[1] + halfLat],
-          [center[0] - halfLng, center[1] - halfLat]
-        ]]
-      },
-      properties: {}
-    };
+    const data = draw.getAll();
+    if (!data.features.length) return;
 
-    draw.deleteAll();
-    draw.add(square);
+    const feature = data.features[0];
+    if (!feature.geometry || feature.geometry.type !== 'Polygon') return;
+
+    const coords = feature.geometry.coordinates[0];
+
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+
+      const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
+      const midLng = (p1[0] + p2[0]) / 2;
+      const midLat = (p1[1] + p2[1]) / 2;
+
+      const el = document.createElement('div');
+      el.className = 'dimension-label';
+      el.innerText = `${dist.toFixed(1)} m`;
+      styleLabel(el);
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([midLng, midLat])
+        .addTo(map);
+
+      labelMarkers.push(marker);
+    }
+
+    const area = turf.area(feature);
+    const areaText = area >= 10000
+      ? `${(area / 10000).toFixed(2)} ha`
+      : `${area.toFixed(1)} m²`;
+
+    const center = turf.centroid(feature).geometry.coordinates;
+
+    const areaEl = document.createElement('div');
+    areaEl.className = 'dimension-label';
+    areaEl.innerText = `Area: ${areaText}`;
+    styleLabel(areaEl);
+
+    const areaMarker = new mapboxgl.Marker(areaEl)
+      .setLngLat(center)
+      .addTo(map);
+
+    labelMarkers.push(areaMarker);
+  }
+
+  function styleLabel(el) {
+    el.style.padding = '2px 6px';
+    el.style.background = 'white';
+    el.style.borderRadius = '4px';
+    el.style.fontSize = '12px';
+    el.style.border = '1px solid #ccc';
+    el.style.boxShadow = '0 0 2px rgba(0, 0, 0, 0.2)';
+    el.style.pointerEvents = 'none';
+  }
+
+  function clearEdgeLabels() {
+    labelMarkers.forEach(marker => marker.remove());
+    labelMarkers = [];
   }
 
   async function submitNewProject() {
@@ -259,17 +324,19 @@ map = new mapboxgl.Map({
         body: JSON.stringify({
           name: name,
           type: type,
-          location: '',  // optional now
+          location: '',
           site_geometry: features
         })
       });
 
-      if (response.ok) {
-        window.location.reload();
-      } else {
-        const data = await response.json();
-        alert("Error: " + data.error);
-      }
+if (response.ok) {
+  const data = await response.json();
+  window.location.href = `/projects/${data.project_id}/`;
+} else {
+  const data = await response.json();
+  alert("Error: " + data.error);
+}
+
     } catch (e) {
       console.error("Project creation failed:", e);
     }
@@ -281,6 +348,7 @@ map = new mapboxgl.Map({
     return cookieValue ? cookieValue.pop() : '';
   }
 </script>
+
 
 
 {% endblock %}

@@ -51,8 +51,9 @@
             #toggle-overlay {
                 position: fixed;
                 top: 10px;
-                left: 10px;
-                z-index: 2;
+                right: 10px;
+                left: auto;
+                z-index: 50;
                 background-color: #f9f9f9;
                 border: 1px solid #ccc;
                 border-radius: 4px;
@@ -126,6 +127,48 @@
         </style>
     </head>
     <body>
+
+        <div id="project-info"
+            class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg"
+            style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 20vw; max-width: 20vw;">
+                <div class="card-body p-2 pb-3">
+                    <!-- Back Button -->
+                    <div class="flex justify-between items-start">
+                    <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
+                    </div>
+
+                    <!-- Project Name -->
+                    <h2 class="text-3xl font-thin font-sans capitalize leading-tight break-words mt-2"
+                        title="{{ project.name }}">
+                    {{ project.name|slice:":18" }}{% if project.name|length > 12 %}…{% endif %}
+                    </h2>
+
+                    <!-- Project Type -->
+                    <p class="text-sm text-gray-600 capitalize mt-1">
+                    {{ project.type }} project
+                    </p>
+                </div>
+                </div>
+
+                <div id="area-display" style="
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.15);
+  z-index: 999;
+  pointer-events: none;
+">
+  <div id="site-area-label">Site Area: --</div>
+  <div id="building-area-label">Building Area: --</div>
+</div>
+
+
+
         <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
         <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
@@ -138,9 +181,9 @@
                  id="detail_mode" name="detail_mode"/>
             </div>
 
-            <button id="toggle-overlay" class="btn btn-accent">[-]</button>
+            <button id="toggle-overlay" class="btn btn-xs btn-accent mt-24 ">[-]</button>
 
-            <div id="overlay" class="absolute top-3 left-0 hidden">
+            <div id="overlay" class="absolute top-2 right-0 hidden">
             </div>
         </div>
 
@@ -164,6 +207,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+
     <script type="module" src="{% static 'js/script.js' %}"></script>
 {% endblock %}
 

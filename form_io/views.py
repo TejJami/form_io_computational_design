@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 import traceback
 from .models import Project
 from django.views.decorators.http import require_POST
+import random
 
 # load mapbox token from .env file
 load_dotenv()
@@ -24,8 +25,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_3")
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-def index(request):
-    return render(request, 'form_io/index.html')
 
 @csrf_exempt
 def solve_grasshopper(request):
@@ -241,11 +240,26 @@ def get_grasshopper_params(request):
         traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
 
+# Utility to get a random pastel background color
+def get_random_pastel():
+    pastel_colors = [
+        "#fde2e2", "#e0f7fa", "#fff3e0", "#f1f8e9", "#e8eaf6",
+        "#fce4ec", "#f9fbe7", "#ede7f6", "#e3f2fd", "#fbe9e7"
+    ]
+    return random.choice(pastel_colors)
+
+# View to render the list of projects with pastel color backgrounds
 def project_list(request):
     projects = Project.objects.all().order_by("-created_at")
+
+    # Attach a random color attribute to each project (not persisted in DB)
+    for project in projects:
+        project.color = get_random_pastel()
+
     mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
     if not mapbox_token:
         print("Warning: MAPBOX_PUBLIC_TOKEN is not set in settings.")
+
     return render(request, "form_io/project_list.html", {
         "projects": projects,
         "mapbox_token": mapbox_token,
@@ -264,18 +278,6 @@ def project_detail(request, project_id):
         "project_polyline": json.dumps(project.building_path),
         "mapbox_token": mapbox_token,
     })
-
-@csrf_exempt
-@require_POST
-def save_project_inputs(request, project_id):
-    project = get_object_or_404(Project, id=project_id)
-    try:
-        data = json.loads(request.body)
-        project.inputs = data
-        project.save()
-        return JsonResponse({"success": True})
-    except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
 
 @csrf_exempt
 @require_POST
@@ -306,3 +308,29 @@ def delete_project(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     project.delete()
     return redirect('project_list')
+
+
+@csrf_exempt
+@require_POST
+def save_project_inputs(request, project_id):
+    project = get_object_or_404(Project, id=project_id)
+    try:
+        data = json.loads(request.body)
+
+        # Save building_path if present
+        if "building_path" in data:
+            project.building_path = data["building_path"]
+
+        # Save site_geometry if present
+        if "site_geometry" in data:
+            project.site_geometry = data["site_geometry"]
+
+        # Save inputs if present
+        if "inputs" in data:
+            project.inputs = data["inputs"]
+
+        project.save()
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=400)
+
