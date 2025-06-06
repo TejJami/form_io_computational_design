@@ -8,7 +8,7 @@ loader.setLibraryPath('https://unpkg.com/rhino3dm@8.0.0-beta3/')
 
 const data = {
   // definition: 'form_io_main_002.gh',
-  definition: 'test_main.gh',
+  definition: 'test_main_2.gh',
 
   inputs: {}  // initialize as empty
 }
@@ -34,6 +34,20 @@ function getInputs() {
       inputs[id] = Number(input.value);
     }
   });
+
+  // Include flattened building path
+  if (PROJECT_POLYLINE) {
+    // Use Turf-accurate coordinates
+    const origin = '0,0,0';
+    const vertices = formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
+
+    inputs['building_origin'] = origin;
+    inputs['building_vertices'] = vertices;
+
+  }
+
+  formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
+
   return inputs;
 }
 
@@ -64,22 +78,48 @@ async function compute() {
   }
 }
 
-function meshToThreejs(mesh) {
-  const loader = new THREE.BufferGeometryLoader()
-  const geometry = loader.parse(mesh.toThreejsJSON())
+// Helper to get accurate meter-to-Mercator scaling factor
+function getMercatorUnitsPerMeterAtOrigin(originLngLat) {
+  // Create a point 1 meter east of the origin
+  const originPoint = turf.point([originLngLat.lng, originLngLat.lat]);
+  const offsetPoint = turf.destination(originPoint, 1, 90, { units: 'meters' }); // 90° = east
 
-  // Scale down from mm to meters
-  geometry.scale(0.00000005, 0.00000005,0.00000005)
-  
+  const mercOrigin = mapboxgl.MercatorCoordinate.fromLngLat(originLngLat);
+  const mercOffset = mapboxgl.MercatorCoordinate.fromLngLat({
+    lng: offsetPoint.geometry.coordinates[0],
+    lat: offsetPoint.geometry.coordinates[1]
+  });
+
+  const dx = mercOffset.x - mercOrigin.x;
+
+  return dx; // true Mercator units per 1 meter at this location
+}
+
+
+
+function meshToThreejs(mesh) {
+  const loader = new THREE.BufferGeometryLoader();
+  const geometry = loader.parse(mesh.toThreejsJSON());
+
+  // Get accurate scale factor from turf-based east offset
+  const mercOrigin = new mapboxgl.MercatorCoordinate(
+    PROJECT_POLYLINE.origin.x,
+    PROJECT_POLYLINE.origin.y
+  );
+  const originLngLat = mercOrigin.toLngLat();
+
+  const mercatorPerMeter = getMercatorUnitsPerMeterAtOrigin(originLngLat);
+
+  geometry.scale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
 
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.5
-  })
+    opacity: 0.8
+  });
 
-  return new THREE.Mesh(geometry, material)
+  return new THREE.Mesh(geometry, material);
 }
 
 
@@ -97,14 +137,16 @@ function replaceCurrentMesh(mesh, type) {
   }
   if (type === 'meshb64') {
     meshb64Mesh = mesh
-    // mesh.geometry.rotateX(Math.PI)
-    mesh.geometry.rotateZ(Math.PI)
+    mesh.geometry.rotateX(Math.PI)
+    mesh.geometry.scale(1, 1, -1) // Flip Y-axis for correct orientation
+    // mesh.geometry.rotateY(Math.PI*2)
 
     threeScene.add(meshb64Mesh)
   } else if (type === 'meshout') {
     meshoutMesh = mesh
-    // mesh.geometry.rotateX(Math.PI)
-    mesh.geometry.rotateZ(Math.PI)
+    mesh.geometry.rotateX(Math.PI)
+    mesh.geometry.scale(1, 1, -1) // Flip Y-axis for correct orientation
+    // mesh.geometry.rotateY(Math.PI*2)
 
     threeScene.add(meshoutMesh)
   }
@@ -123,28 +165,46 @@ function decodeItem(item) {
 }
 
 function collectResults(json) {
-  if (doc) doc.delete()
-  doc = new rhino.File3dm()
+  if (doc) doc.delete();
+  doc = new rhino.File3dm();
+
   json.values.forEach(output => {
-    const branches = output.InnerTree
+    const branches = output.InnerTree;
+
     Object.values(branches).forEach(branch => {
       branch.forEach(item => {
-        const obj = decodeItem(item)
+        const obj = decodeItem(item);
         if (obj) {
-          const mesh = meshToThreejs(obj)
-          // Compute site center in Mercator (approx meters)
-          const centerLngLat = getBoundsFromSiteGeometry(PROJECT_SITE).center
-          const centerCoord = mapboxgl.MercatorCoordinate.fromLngLat({ lng: centerLngLat[0], lat: centerLngLat[1] })
+          const mesh = meshToThreejs(obj);
 
-          const translation = new THREE.Vector3(centerCoord.x, centerCoord.y, 0)
-          mesh.position.copy(translation)
-          replaceCurrentMesh(mesh, output.ParamName.includes('meshb64') ? 'meshb64' : 'meshout')
-          doc.objects().add(obj, null)
+          // --- Accurate translation using origin from Mercator-based polyline
+          const originX = PROJECT_POLYLINE?.origin?.x || 0;
+          const originY = PROJECT_POLYLINE?.origin?.y || 0;
+          mesh.position.set(originX, originY, 0);
+
+          // --- Apply rotation based on building path orientation (first edge direction)
+          const points = PROJECT_POLYLINE?.points;
+          if (points?.length >= 2) {
+            const dx = points[1].x - points[0].x;
+            const dy = points[1].y - points[0].y;
+            const angle = Math.atan2(dy, dx); // Z-axis rotation in radians
+            mesh.geometry.rotateZ = angle;
+          }
+
+          // --- Place the mesh into the scene
+          const isMeshb64 = output.ParamName.includes('meshb64');
+          replaceCurrentMesh(mesh, isMeshb64 ? 'meshb64' : 'meshout');
+
+
+          // --- Store decoded object (optional)
+          doc.objects().add(obj, null);
         }
-      })
-    })
-  })
+      });
+    });
+  });
 }
+
+
 
 // Global variables for site and building polygons
 let sitePolygonId = null;
@@ -250,7 +310,7 @@ function init() {
         'fill-extrusion-color': '#aaa',
         'fill-extrusion-height': ['get', 'height'],
         'fill-extrusion-base': ['get', 'min_height'],
-        'fill-extrusion-opacity': 0.5
+        'fill-extrusion-opacity': 0.3
       }
     });
 
@@ -430,8 +490,6 @@ function saveSiteGeometry(geometry) {
   });
 }
 
-
-
 function handleBuildingPath(geometry) {
   const coords = geometry.coordinates[0];
   const originLngLat = coords[0];
@@ -455,10 +513,15 @@ function handleBuildingPath(geometry) {
     points: points
   };
 
-  saveBuildingPath(relativePath);  // POST to your backend
+  saveBuildingPath(relativePath); // Persist to backend
+
+  // ✅ Trigger updateInputs after saving
+  const formatted = formatBuildingPathAsStrings(relativePath);
+  updateInputs({
+    building_origin: formatted.origin,
+    building_vertices: formatted.vertices
+  });
 }
-
-
 
 
 function saveBuildingPath(buildingPath) {
@@ -484,7 +547,6 @@ function saveBuildingPath(buildingPath) {
   });
 }
 
-
 function getPaddedBounds(bounds, paddingDegrees = 0.001) {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
@@ -496,12 +558,30 @@ function getPaddedBounds(bounds, paddingDegrees = 0.001) {
 }
 
 function getBoundsFromSiteGeometry(geojson) {
-  const bounds = new mapboxgl.LngLatBounds()
-  const coords = geojson.features?.[0]?.geometry?.coordinates?.[0] || []
-  coords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
-  const center = bounds.getCenter()
-  return { bounds, center: [center.lng, center.lat] }
+  const bbox = turf.bbox(geojson); // [minX, minY, maxX, maxY]
+
+  // Get original bounds and center
+  const sw = new mapboxgl.LngLat(bbox[0], bbox[1]);
+  const ne = new mapboxgl.LngLat(bbox[2], bbox[3]);
+  const bounds = new mapboxgl.LngLatBounds(sw, ne);
+  const center = bounds.getCenter();
+
+  // Compute half-widths
+  const lngSpan = (ne.lng - sw.lng) / 2;
+  const latSpan = (ne.lat - sw.lat) / 2;
+
+  // Expand outward from center (2x scale)
+  const scaledSW = new mapboxgl.LngLat(center.lng - lngSpan, center.lat - latSpan);
+  const scaledNE = new mapboxgl.LngLat(center.lng + lngSpan, center.lat + latSpan);
+
+  const scaledBounds = new mapboxgl.LngLatBounds(scaledSW, scaledNE);
+  return {
+    bounds: scaledBounds,
+    center: [center.lng, center.lat]
+  };
 }
+
+
 
 function getCSRFToken() {
   const name = 'csrftoken'
@@ -654,11 +734,17 @@ function onSliderChange() {
 
 // Dynamically attach events to all inputs in overlay
 function registerInputListeners() {
-  document.querySelectorAll('#overlay input').forEach(input => {
+  document.querySelectorAll('#overlay input, #overlay textarea').forEach(input => {
+    // Trigger recompute when user changes value manually
+    input.addEventListener('input', onSliderChange, false);
+    input.addEventListener('change', onSliderChange, false);
+
+    // Optional: still keep mouse/touch if needed
     input.addEventListener('mouseup', onSliderChange, false);
     input.addEventListener('touchend', onSliderChange, false);
   });
 }
+
 
 
 async function fetchGrasshopperInputs(definitionFile) {
@@ -698,13 +784,17 @@ function extractInputsFromGrasshopperData(data) {
         defaultValue = inputMeta.Default.InnerTree["{0}"][0].data;
       }
 
-      // Determine input type fallback logic
+      // Force known system-generated fields as text
       let type = "number";
-      const paramType = inputMeta?.ParamType?.toLowerCase();
-      if (paramType === "integer") {
-        type = "number";
-      } else if (paramType === "boolean") {
-        type = "checkbox";
+      if (["building_origin", "building_vertices"].includes(inputName)) {
+        type = "text";
+      } else {
+        const paramType = inputMeta?.ParamType?.toLowerCase();
+        if (paramType === "boolean") {
+          type = "checkbox";
+        } else if (paramType === "string") {
+          type = "text";
+        }
       }
 
       inputs.push({
@@ -718,11 +808,18 @@ function extractInputsFromGrasshopperData(data) {
   return inputs;
 }
 
+
+/**
+ * Dynamically generates the input UI form in the overlay panel.
+ * Supports number, checkbox, and text types (e.g. string parameters like building_vertices).
+ *
+ * @param {Array} inputs - Array of input objects with { name, default, type }
+ */
 function populateInputsUI(inputs) {
-  console.log(inputs)
+  console.log(inputs);
   const overlay = document.getElementById('overlay');
 
-  // Clear current input form
+  // Clear any existing content in the overlay panel
   overlay.innerHTML = '';
 
   const form = document.createElement('div');
@@ -739,8 +836,21 @@ function populateInputsUI(inputs) {
     label.classList.add('label');
     label.textContent = input.name;
 
-    const inputField = document.createElement('input');
-    inputField.type = input.type;
+    let inputField;
+
+    // For multiline strings like building_vertices, use a <textarea>
+    if (input.type === 'text' && typeof input.default === 'string' && input.default.includes(';')) {
+      inputField = document.createElement('textarea');
+      inputField.rows = 3;
+      inputField.readOnly = true;  // Optional: protect system-generated inputs
+    } else {
+      inputField = document.createElement('input');
+      inputField.type = input.type;
+      if (input.type === 'text') {
+        inputField.readOnly = true; // Optional: prevent editing string inputs
+      }
+    }
+
     inputField.id = input.name;
     inputField.name = input.name;
     inputField.value = input.default;
@@ -754,10 +864,10 @@ function populateInputsUI(inputs) {
   form.appendChild(grid);
   overlay.appendChild(form);
 
-  // Re-register listeners
+  // Attach slider/input listeners again
   registerInputListeners();
-
 }
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   preloadInputs(PROJECT_INPUTS);  // okay if these exist
@@ -789,6 +899,17 @@ function clearSiteLabels() {
   siteLabelMarkers = [];
 }
 
+function flatDistance(p1, p2) {
+  const c1 = mapboxgl.MercatorCoordinate.fromLngLat({ lng: p1[0], lat: p1[1] });
+  const c2 = mapboxgl.MercatorCoordinate.fromLngLat({ lng: p2[0], lat: p2[1] });
+
+  const dx = c2.x - c1.x;
+  const dy = c2.y - c1.y;
+
+  return Math.sqrt(dx * dx + dy * dy); // in meters
+}
+
+
 function showSiteBoundaryDimensions(feature) {
   if (!feature || feature.geometry?.type !== 'Polygon') return;
 
@@ -801,7 +922,9 @@ function showSiteBoundaryDimensions(feature) {
     const p1 = coords[i];
     const p2 = coords[i + 1];
 
+    // const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
     const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
+
     const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
 
     const el = document.createElement('div');
@@ -869,8 +992,62 @@ function showBuildingPathDimensions(geometry) {
   }
 }
 
+function formatBuildingPathAsStrings(path) {
+  // Format origin as a comma-separated string
+  const origin = `${path.origin.x},${path.origin.y},${path.origin.z || 0}`;
 
-function clearAllLabels() {
-  labelMarkers.forEach(m => m.remove());
-  labelMarkers = [];
+  // Format points as semicolon-separated "x,y,z" strings
+  const vertices = path.points
+    .map(pt => `${pt.x},${pt.y},${pt.z || 0}`)
+    .join(';');
+
+  return {
+    origin,
+    vertices
+  };
+}
+
+
+/**
+ * Converts building path points to relative distances using Turf.js, with the first point as origin.
+ * Returns a semicolon-separated string of "x,y,z" in meters.
+ * 
+ * @param {Object} path - The building path object with 'origin' and 'points' in Mercator meters.
+ * @returns {string} - A string with each point as "x,y,z" in meters, separated by semicolons.
+ */
+function formatBuildingPathWithTurfDistances(path) {
+  if (!path || !Array.isArray(path.points) || path.points.length === 0) {
+    console.warn("Invalid building path.");
+    return '';
+  }
+
+  // Compute absolute origin coordinate
+  const absOriginX = path.points[0].x + path.origin.x;
+  const absOriginY = path.points[0].y + path.origin.y;
+
+  const originLngLat = new mapboxgl.MercatorCoordinate(absOriginX, absOriginY).toLngLat();
+  const originPoint = [originLngLat.lng, originLngLat.lat];
+
+  const result = path.points.map(pt => {
+    const absX = pt.x + path.origin.x;
+    const absY = pt.y + path.origin.y;
+
+    const lngLat = new mapboxgl.MercatorCoordinate(absX, absY).toLngLat();
+    const currentPoint = [lngLat.lng, lngLat.lat];
+
+    const eastRef = [currentPoint[0], originPoint[1]];
+    const xDist = turf.distance(originPoint, eastRef, { units: 'meters' });
+    const x = currentPoint[0] >= originPoint[0] ? xDist : -xDist;
+
+    const northRef = [originPoint[0], currentPoint[1]];
+    const yDist = turf.distance(originPoint, northRef, { units: 'meters' });
+    const y = currentPoint[1] >= originPoint[1] ? yDist : -yDist;
+
+    const z = (pt.z || 0) - (path.points[0].z || 0);
+
+    return `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
+  }).join(';');
+
+  console.log('[Form IO] Turf-based relative building path string:', result);
+  return result;
 }

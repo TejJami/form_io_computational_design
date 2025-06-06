@@ -12,16 +12,7 @@
         <title>form.io</title>
         <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet" type="text/css" />
         <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-        <script type="importmap">
-            {
-                "imports": {
-                    "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-                    "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js",
-                    "three/examples/jsm/loaders/3DMLoader": "https://unpkg.com/three@0.158.0/examples/jsm/loaders/3DMLoader.js",
-                    "rhino3dm": "https://unpkg.com/rhino3dm@8.0.0-beta3/rhino3dm.module.js"
-                }
-            }
-        </script>
+
         <script>
             const PROJECT_ID = {{ project.id }};
             const PROJECT_INPUTS = {{ project_inputs|safe }};
@@ -151,21 +142,21 @@
                 </div>
 
                 <div id="area-display" style="
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 10px 14px;
-  font-size: 14px;
-  box-shadow: 0 0 4px rgba(0,0,0,0.15);
-  z-index: 999;
-  pointer-events: none;
-">
-  <div id="site-area-label">Site Area: --</div>
-  <div id="building-area-label">Building Area: --</div>
-</div>
+                position: absolute;
+                bottom: 8px;
+                left: 8px;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                padding: 10px 14px;
+                font-size: 14px;
+                box-shadow: 0 0 4px rgba(0,0,0,0.15);
+                z-index: 999;
+                pointer-events: none;
+                ">
+                <div id="site-area-label">Site Area: --</div>
+                <div id="building-area-label">Building Area: --</div>
+                </div>
 
 
 

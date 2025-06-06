@@ -232,9 +232,9 @@ def get_grasshopper_params(request):
             return JsonResponse({"error": response.text}, status=response.status_code)
 
         response_data = response.json()
+        print("response_data")
 
         return JsonResponse(response_data)
-        print("Calling for input data")
     except Exception as e:
         print("[EXCEPTION] An error occurred during get_grasshopper_inputs:")
         traceback.print_exc()
