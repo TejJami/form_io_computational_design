@@ -112,6 +112,12 @@ function meshToThreejs(mesh) {
 
   geometry.scale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
 
+  
+  console.log('Mercator scale factor:', mercatorPerMeter);
+  geometry.computeBoundingBox();
+  console.log('Original geometry size:', geometry.boundingBox);
+
+
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
