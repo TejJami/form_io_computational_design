@@ -110,19 +110,15 @@ function meshToThreejs(mesh) {
 
   const mercatorPerMeter = getMercatorUnitsPerMeterAtOrigin(originLngLat);
 
-  geometry.scale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
-
-  
+  // geometry.scale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
   console.log('Mercator scale factor:', mercatorPerMeter);
-  geometry.computeBoundingBox();
-  console.log('Original geometry size:', geometry.boundingBox);
 
 
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.8
+    opacity: 0.6
   });
 
   return new THREE.Mesh(geometry, material);
@@ -143,17 +139,9 @@ function replaceCurrentMesh(mesh, type) {
   }
   if (type === 'meshb64') {
     meshb64Mesh = mesh
-    mesh.geometry.rotateX(Math.PI)
-    mesh.geometry.scale(1, 1, -1) // Flip Y-axis for correct orientation
-    // mesh.geometry.rotateY(Math.PI*2)
-
     threeScene.add(meshb64Mesh)
   } else if (type === 'meshout') {
     meshoutMesh = mesh
-    mesh.geometry.rotateX(Math.PI)
-    mesh.geometry.scale(1, 1, -1) // Flip Y-axis for correct orientation
-    // mesh.geometry.rotateY(Math.PI*2)
-
     threeScene.add(meshoutMesh)
   }
 }
@@ -182,20 +170,6 @@ function collectResults(json) {
         const obj = decodeItem(item);
         if (obj) {
           const mesh = meshToThreejs(obj);
-
-          // --- Accurate translation using origin from Mercator-based polyline
-          const originX = PROJECT_POLYLINE?.origin?.x || 0;
-          const originY = PROJECT_POLYLINE?.origin?.y || 0;
-          mesh.position.set(originX, originY, 0);
-
-          // --- Apply rotation based on building path orientation (first edge direction)
-          const points = PROJECT_POLYLINE?.points;
-          if (points?.length >= 2) {
-            const dx = points[1].x - points[0].x;
-            const dy = points[1].y - points[0].y;
-            const angle = Math.atan2(dy, dx); // Z-axis rotation in radians
-            mesh.geometry.rotateZ = angle;
-          }
 
           // --- Place the mesh into the scene
           const isMeshb64 = output.ParamName.includes('meshb64');
@@ -419,6 +393,7 @@ const customLayer = {
   onAdd: async function (_map, gl) {
     threeCamera = new THREE.Camera()
     threeScene = new THREE.Scene()
+
     threeRenderer = new THREE.WebGLRenderer({
       canvas: _map.getCanvas(),
       context: gl,
@@ -434,12 +409,51 @@ const customLayer = {
   },
 
   render: function (gl, matrix) {
-    const m = new THREE.Matrix4().fromArray(matrix)
-    threeCamera.projectionMatrix = m
-    threeRenderer.state.reset()
-    threeRenderer.render(threeScene, threeCamera)
-    map.triggerRepaint()
+    const m = new THREE.Matrix4().fromArray(matrix);
+
+    // --- Origin from project polyline
+    const originX = PROJECT_POLYLINE?.origin?.x || 0;
+    const originY = PROJECT_POLYLINE?.origin?.y || 0;
+    const mercOrigin = new mapboxgl.MercatorCoordinate(originX, originY);
+    const originLngLat = mercOrigin.toLngLat();
+
+    // --- Accurate Mercator scaling per meter
+    const mercatorPerMeter = getMercatorUnitsPerMeterAtOrigin(originLngLat);
+    const scale = new THREE.Matrix4().makeScale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
+
+    // --- Rotation around Z-axis from polyline direction
+    let rotationZ = 0;
+    const points = PROJECT_POLYLINE?.points;
+    if (points?.length >= 2) {
+      const dx = points[1].x - points[0].x;
+      const dy = points[1].y - points[0].y;
+      rotationZ = Math.atan2(dy, dx);
+    }
+
+    // Rotation around Z (geometry lies in XY plane), and flip Z axis for Y-up to Z-up
+    const rotateZ = new THREE.Matrix4().makeRotationZ(Math.PI*2);
+    const rotateX = new THREE.Matrix4().makeRotationX(Math.PI); // Flip vertical orientation (Z-up)
+    const flipY = new THREE.Matrix4().makeScale(1, 1, -1);       // Flip Y if required
+
+    // --- Translation
+    const translation = new THREE.Matrix4().makeTranslation(originX, originY, 0);
+
+    // --- Final transformation matrix
+    const modelTransform = new THREE.Matrix4()
+      .multiply(translation)
+      .multiply(rotateZ)
+      .multiply(rotateX)
+      .multiply(flipY)
+      .multiply(scale);
+
+    // --- Set the final camera matrix
+    threeCamera.projectionMatrix = m.clone().multiply(modelTransform);
+
+    threeRenderer.state.reset();
+    threeRenderer.render(threeScene, threeCamera);
+    map.triggerRepaint();
   }
+
 }
 
 
