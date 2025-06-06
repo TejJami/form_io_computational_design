@@ -200,16 +200,24 @@ function collectResults(json) {
           // --- Place the mesh into the scene
           const isMeshb64 = output.ParamName.includes('meshb64');
           replaceCurrentMesh(mesh, isMeshb64 ? 'meshb64' : 'meshout');
-
-
+          
           // --- Store decoded object (optional)
           doc.objects().add(obj, null);
+
+          const edges = new THREE.EdgesGeometry(mesh.geometry);
+          const line = new THREE.LineSegments(
+              edges,
+              new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
+            );
+          line.material.depthTest = false;
+          line.material.depthWrite = false;
+          line.renderOrder = 1; // Prevent visual glitches
+          mesh.add(line);
         }
       });
     });
   });
 }
-
 
 
 // Global variables for site and building polygons
