@@ -16,8 +16,8 @@
         <script>
             const PROJECT_ID = {{ project.id }};
             const PROJECT_INPUTS = {{ project_inputs|safe }};
-            const PROJECT_SITE = {{ project_site|safe }};
-            console.log("PROJECT_SITE:", PROJECT_SITE);
+            const site_Envelope = {{ site_Envelope|safe }};
+            console.log("site_Envelope:", site_Envelope);
             const PROJECT_POLYLINE = {{ project_polyline|safe }};
         </script>
 
@@ -118,7 +118,7 @@
         </style>
     </head>
     <body>
-        <!-- PROJECT INFO CONTAINER -->
+        <!-- PROJECT CONTAINER -->
         <div id="project-info"
             class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg m-0 p-0"
             style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 20vw; max-width: 20vw;">
@@ -157,29 +157,29 @@
         <!-- TOOLBAR CONTAINER -->
         <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] max-h-[50vh] overflow-y-auto space-y-2">
         
-            <!-- SITE BOUNDARY TOOLS -->
+        <!-- SITE ENVELOPE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
             <input type="checkbox" />
             <div class="collapse-title p-0">
-            <div id="site-tools" class="card bg-white border-0 rounded-none">
+            <div id="envelope-tools" class="card bg-white border-0 rounded-none">
                 <p class="text-sm text-gray-600 p-1">
                 <iconify-icon icon="mdi:map-marker-radius"></iconify-icon>
-                Boundary Tools
+                Envelope Tools
                 </p>
             </div>
             </div>
             <div class="collapse-content p-0">
             <div class="flex flex-wrap gap-2 p-1">
-                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Site Curve">
+                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Envelope Curve">
                 <iconify-icon icon="ix:select-alt"></iconify-icon>
                 </button>
-                <button id="btn-site-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Polygon">
+                <button id="btn-envelope-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw envelope Polygon">
                 <iconify-icon icon="ph:polygon"></iconify-icon>
                 </button>
-                <button id="btn-site-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Rectangle">
+                <button id="btn-envelope-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw envelope Rectangle">
                 <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
                 </button>
-                <button id="btn-site-delete" class="btn btn-error btn-outline btn-sm" title="Delete Site Curve">
+                <button id="btn-envelope-delete" class="btn btn-error btn-outline btn-sm" title="Delete envelope Curve">
                 <iconify-icon icon="material-symbols-light:delete-outline"></iconify-icon>
                 </button>
             </div>
@@ -215,14 +215,14 @@
             </div>
         </div>
 
-        <!-- CUSTOMISE TOOLS -->
+        <!-- TWEAK ENVELOPE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
             <input type="checkbox" />
             <div class="collapse-title p-0">
             <div id="customise-tools" class="card bg-white border-0 rounded-none w-full">
                 <p class="text-sm text-gray-600 p1 flex items-center gap-2">
                 <iconify-icon icon="mdi:tune-variant"></iconify-icon>
-                Tweak Building
+                Tweak Envelope
                 </p>
             </div>
             </div>

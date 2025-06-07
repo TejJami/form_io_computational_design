@@ -37,13 +37,13 @@ function getInputs() {
   });
 
   if (PROJECT_POLYLINE) {
-    inputs['building_origin'] = '0,0,0';
-    inputs['building_vertices'] = formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
+    inputs['envelope_origin'] = '0,0,0';
+    inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(PROJECT_POLYLINE);
   }
 
-  if (PROJECT_SITE) {
+  if (site_Envelope) {
     inputs['site_origin'] = '0,0,0'; // assume relative to first point
-    inputs['site_vertices'] = formatSiteBoundaryWithTurfDistances(PROJECT_SITE);
+    inputs['site_vertices'] = formatSiteBoundaryWithTurfDistances(site_Envelope);
   }
 
   return inputs;
@@ -189,7 +189,7 @@ let siteLabelMarkers = [];
 let buildingLabelMarkers = [];
 
 function init() {
-  const siteBounds = getBoundsFromSiteGeometry(PROJECT_SITE);
+  const siteBounds = getBoundsFromSiteGeometry(site_Envelope);
   const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
   map = new mapboxgl.Map({
@@ -216,13 +216,13 @@ function init() {
 
   map.on('load', () => {
     // Site layer and polygon
-    if (PROJECT_SITE?.features?.length) {
-      const siteFeature = PROJECT_SITE.features[0];
+    if (site_Envelope?.features?.length) {
+      const siteFeature = site_Envelope.features[0];
       siteFeature.properties = { role: 'site' };
 
       map.addSource('site', {
         type: 'geojson',
-        data: PROJECT_SITE
+        data: site_Envelope
       });
 
       map.addLayer({
@@ -231,18 +231,16 @@ function init() {
         source: 'site',
         paint: {
           'fill-color': '#3b82f6',
-          'fill-opacity': 0.1
-        }
+          'fill-opacity': 0
+        } 
       });
 
-      const addedSite = draw.add(siteFeature);
-      sitePolygonId = addedSite[0];
-      clearSiteLabels();
-      showSiteBoundaryDimensions(siteFeature);
+      // const addedSite = draw.add(siteFeature);
+      // sitePolygonId = addedSite[0];
     }
 
     // Building layer and polygon
-    const buildingFeature = buildingPathToGeoJSON(PROJECT_POLYLINE);
+    const buildingFeature = siteenvelopeToGeoJSON(PROJECT_POLYLINE);
     if (buildingFeature) {
       buildingFeature.properties = { role: 'building' };
 
@@ -264,7 +262,7 @@ function init() {
       const addedBuilding = draw.add(buildingFeature);
       buildingPolygonId = addedBuilding[0];
       clearBuildingLabels();
-      showBuildingPathDimensions(buildingFeature.geometry);
+      showSiteEvnelopeDimensions(buildingFeature.geometry);
     }
 
     // 3D buildings
@@ -304,16 +302,14 @@ function init() {
     if (role === 'site') {
       sitePolygonId = feature.id;
       saveSiteGeometry(feature.geometry);
-      clearSiteLabels();
-      showSiteBoundaryDimensions(feature);
       compute();
 
     } else {
       buildingPolygonId = feature.id;
-      handleBuildingPath(feature.geometry);
+      handleSiteEvnelope(feature.geometry);
       updateBuildingSource(feature.geometry);
       clearBuildingLabels();
-      showBuildingPathDimensions(feature.geometry);
+      showSiteEvnelopeDimensions(feature.geometry);
       compute();
     }
   });
@@ -328,10 +324,10 @@ function init() {
       clearSiteLabels();
       showSiteBoundaryDimensions(feature);
     } else if (role === 'building') {
-      handleBuildingPath(feature.geometry);
+      handleSiteEvnelope(feature.geometry);
       updateBuildingSource(feature.geometry);
       clearBuildingLabels();
-      showBuildingPathDimensions(feature.geometry);
+      showSiteEvnelopeDimensions(feature.geometry);
     }
   });
 
@@ -341,11 +337,11 @@ function init() {
       if (f.id === sitePolygonId) {
         sitePolygonId = null;
         clearSiteLabels();
-        console.warn('[Form IO] Site boundary deleted');
+        console.warn('[Form IO] Site Bounds deleted');
       } else if (f.id === buildingPolygonId) {
         buildingPolygonId = null;
         clearBuildingLabels();
-        console.warn('[Form IO] Building path deleted');
+        console.warn('[Form IO] site_envelope deleted');
       }
     });
   });
@@ -441,7 +437,7 @@ const customLayer = {
 }
 
 
-function buildingPathToGeoJSON(path) {
+function siteenvelopeToGeoJSON(path) {
   if (!path || !path.origin || !Array.isArray(path.points)) return null;
 
   const coords = path.points.map(p => [p.x + path.origin.x, p.y + path.origin.y]);
@@ -484,7 +480,7 @@ function saveSiteGeometry(geometry) {
 
   const payload = {
     inputs: getInputs(),  // keep if needed
-    site_geometry: geojson
+    site_bounds: geojson
   };
 
   fetch(`/api/projects/${PROJECT_ID}/save/`, {
@@ -496,13 +492,13 @@ function saveSiteGeometry(geometry) {
     body: JSON.stringify(payload)
   }).then(res => {
     if (!res.ok) throw new Error('Site geometry save failed');
-    console.log('[Form IO] Site boundary updated successfully');
+    console.log('[Form IO] Site Bounds updated successfully');
   }).catch(err => {
-    console.error('[Form IO] Failed to save site boundary:', err);
+    console.error('[Form IO] Failed to save Site Bounds:', err);
   });
 }
 
-function handleBuildingPath(geometry) {
+function handleSiteEvnelope(geometry) {
   const coords = geometry.coordinates[0];
   const originLngLat = coords[0];
 
@@ -525,24 +521,24 @@ function handleBuildingPath(geometry) {
     points: points
   };
 
-  saveBuildingPath(relativePath); // Persist to backend
+  saveSiteEvnelope(relativePath); // Persist to backend
 
   // ✅ Trigger updateInputs after saving
-  const formatted = formatBuildingPathAsStrings(relativePath);
+  const formatted = formatSiteEvnelopeAsStrings(relativePath);
   updateInputs({
-    building_origin: formatted.origin,
-    building_vertices: formatted.vertices
+    envelope_origin: formatted.origin,
+    envelope_vertices: formatted.vertices
   });
   compute(); // Recompute after saving
 }
 
 
-function saveBuildingPath(buildingPath) {
+function saveSiteEvnelope(SiteEvnelope) {
   if (!PROJECT_ID) return;
 
   const payload = {
     inputs: getInputs(),
-    building_path: buildingPath
+    site_envelope: SiteEvnelope
   };
 
   fetch(`/api/projects/${PROJECT_ID}/save/`, {
@@ -798,7 +794,7 @@ function extractInputsFromGrasshopperData(data) {
 
       // Force known system-generated fields as text
       let type = "number";
-      if (["building_origin", "building_vertices"].includes(inputName)) {
+      if (["envelope_origin", "envelope_vertices"].includes(inputName)) {
         type = "text";
       } else {
         const paramType = inputMeta?.ParamType?.toLowerCase();
@@ -823,7 +819,7 @@ function extractInputsFromGrasshopperData(data) {
 
 /**
  * Dynamically generates the input UI form in the overlay panel.
- * Supports number, checkbox, and text types (e.g. string parameters like building_vertices).
+ * Supports number, checkbox, and text types (e.g. string parameters like envelope_vertices).
  *
  * @param {Array} inputs - Array of input objects with { name, default, type }
  */
@@ -909,7 +905,7 @@ function flatDistance(p1, p2) {
 function showSiteBoundaryDimensions(feature) {
   if (!feature || feature.geometry?.type !== 'Polygon') return;
 
-  // Clear previous edge length labels for the site boundary
+  // Clear previous edge length labels for the Site Bounds
   clearSiteLabels();
 
   const coords = feature.geometry.coordinates[0];
@@ -952,7 +948,7 @@ function clearBuildingLabels() {
   buildingLabelMarkers = [];
 }
 
-function showBuildingPathDimensions(geometry) {
+function showSiteEvnelopeDimensions(geometry) {
   if (!geometry || geometry.type !== 'Polygon') return;
 
   clearBuildingLabels();
@@ -988,7 +984,7 @@ function showBuildingPathDimensions(geometry) {
   }
 }
 
-function formatBuildingPathAsStrings(path) {
+function formatSiteEvnelopeAsStrings(path) {
   // Format origin as a comma-separated string
   const origin = `${path.origin.x},${path.origin.y},${path.origin.z || 0}`;
 
@@ -1005,15 +1001,15 @@ function formatBuildingPathAsStrings(path) {
 
 
 /**
- * Converts building path points to relative distances using Turf.js, with the first point as origin.
+ * Converts site_envelope points to relative distances using Turf.js, with the first point as origin.
  * Returns a semicolon-separated string of "x,y,z" in meters.
  * 
- * @param {Object} path - The building path object with 'origin' and 'points' in Mercator meters.
+ * @param {Object} path - The site_envelope object with 'origin' and 'points' in Mercator meters.
  * @returns {string} - A string with each point as "x,y,z" in meters, separated by semicolons.
  */
-function formatBuildingPathWithTurfDistances(path) {
+function formatSiteEvnelopeWithTurfDistances(path) {
   if (!path || !Array.isArray(path.points) || path.points.length === 0) {
-    console.warn("Invalid building path.");
+    console.warn("Invalid site_envelope.");
     return '';
   }
 
@@ -1044,7 +1040,7 @@ function formatBuildingPathWithTurfDistances(path) {
     return `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
   }).join(';');
 
-  console.log('[Form IO] Turf-based relative building path string:', result);
+  console.log('[Form IO] Turf-based relative site_envelope string:', result);
   return result;
 }
 
@@ -1093,6 +1089,5 @@ function formatSiteBoundaryWithTurfDistances(siteGeoJSON) {
     return `${x.toFixed(3)},${y.toFixed(3)},0.000`; // z=0 for flat 2D site
   }).join(';');
 
-  console.log('[Form IO] Turf-based site boundary string:', result);
   return result;
 }

@@ -274,8 +274,8 @@ def project_detail(request, project_id):
     return render(request, "form_io/index.html", {
         "project": project,
         "project_inputs": json.dumps(project.inputs),
-        "project_site": json.dumps(project.site_geometry),
-        "project_polyline": json.dumps(project.building_path),
+        "site_Envelope": json.dumps(project.site_bounds),
+        "project_polyline": json.dumps(project.site_envelope),
         "mapbox_token": mapbox_token,
     })
 
@@ -287,16 +287,16 @@ def api_create_project(request):
         name = data.get("name")
         project_type = data.get("type")
         # location = data.get("location")
-        site_geometry = data.get("site_geometry")
+        site_bounds = data.get("site_bounds")
 
-        if not name or not site_geometry:
+        if not name or not site_bounds:
             return JsonResponse({"error": "Missing name or site geometry"}, status=400)
 
         project = Project.objects.create(
             name=name,
             type=project_type,
             # location=location,
-            site_geometry=site_geometry,
+            site_bounds=site_bounds,
         )
         return JsonResponse({"success": True, "project_id": project.id})
 
@@ -317,13 +317,13 @@ def save_project_inputs(request, project_id):
     try:
         data = json.loads(request.body)
 
-        # Save building_path if present
-        if "building_path" in data:
-            project.building_path = data["building_path"]
+        # Save site_envelope if present
+        if "site_envelope" in data:
+            project.site_envelope = data["site_envelope"]
 
-        # Save site_geometry if present
-        if "site_geometry" in data:
-            project.site_geometry = data["site_geometry"]
+        # Save site_bounds if present
+        if "site_bounds" in data:
+            project.site_bounds = data["site_bounds"]
 
         # Save inputs if present
         if "inputs" in data:
