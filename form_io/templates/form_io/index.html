@@ -118,14 +118,13 @@
         </style>
     </head>
     <body>
-
         <div id="project-info"
-            class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg"
+            class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg m-0 p-0"
             style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 20vw; max-width: 20vw;">
-                <div class="card-body p-2 pb-3">
-                    <!-- Back Button -->
+                <div class="card-body p-0">
+                    <!-- Back Button --> 
                     <div class="flex justify-between items-start">
-                    <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
+                        <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
                     </div>
 
                     <!-- Project Name -->
@@ -140,60 +139,88 @@
                     </p>
                 </div>
                 </div>
+                <div id="area-display" style="position: absolute;bottom: 4px;left: 4px; background: white;border-radius: 6px;padding: 5px 5px;z-index: 999;
+                    pointer-events: none;" class="text-sm text-gray-700">
+                    <div id="site-area-label">Site Area: --</div>
+                    <div id="building-area-label">Building Area: --</div>
+                </div>
 
-                <div id="area-display" style="
-                position: absolute;
-                bottom: 8px;
-                left: 8px;
-                background: white;
-                border: 1px solid #ccc;
-                border-radius: 6px;
-                padding: 10px 14px;
-                font-size: 14px;
-                box-shadow: 0 0 4px rgba(0,0,0,0.15);
-                z-index: 999;
-                pointer-events: none;
-                ">
-                <div id="site-area-label">Site Area: --</div>
-                <div id="building-area-label">Building Area: --</div>
+                <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
+                <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
+
+                <div id="container" class="relative">
+                    <button id="toggle-overlay" class="btn btn-xs btn-accent mt-24 ">[-]</button>
+                    <div id="overlay" class="absolute top-2 right-0 hidden">
+                    </div>
+                </div>
+
+                <!-- TOOLBAR CONTAINER -->
+                <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] space-y-2">
+
+                <!-- BUILDING TOOLS -->
+                <div id="building-tools" class="card bg-white border border-base-300 shadow-md rounded-lg">
+                    <p class="text-sm text-gray-600 p-2">
+                        <iconify-icon icon="mdi:building"></iconify-icon>
+                        Building Tools</p>
+                    <div class="flex flex-wrap gap-2 p-2">
+                    <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Building">
+                        <iconify-icon icon="ix:select-alt"></iconify-icon>
+                    </button>
+                    <button id="btn-bldg-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Polygon">
+                        <iconify-icon icon="ph:polygon"></iconify-icon>
+                    </button>
+                    <button id="btn-bldg-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Rectangle">
+                        <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                    </button>
+                    <button id="btn-bldg-delete" class="btn btn-error btn-outline btn-sm " title="Delete Building">
+                        <iconify-icon icon="material-symbols-light:delete-outline-rounded"></iconify-icon>
+                    </button>
+                    </div>
+                </div>
+
+                <!-- SITE BOUNDARY TOOLS -->
+                <div id="site-tools" class="card bg-white border border-base-300 shadow-md rounded-lg">
+                        
+                    <p class="text-sm text-gray-600 p-2">
+                    <iconify-icon icon="mdi:map-marker-radius"></iconify-icon>
+                        Boundary Tools 
+                    </p>
+                    <div class="flex flex-wrap gap-2 p-2">
+                    <button id="btn-bldg-select" class="btn btn-neutral btn-outline  btn-sm" title="Select Site Curve">
+                        <iconify-icon icon="ix:select-alt"></iconify-icon>
+                    </button>
+                    <button id="btn-site-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Polygon">
+                        <iconify-icon icon="ph:polygon"></iconify-icon>
+                    </button>
+                    <button id="btn-site-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Rectangle">
+                        <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                    </button>
+                    <button id="btn-site-delete" class="btn btn-error btn-outline btn-sm  " title="Delete Site Curve">
+                        <iconify-icon icon="material-symbols-light:delete-outline"></iconify-icon>
+                    </button>
+                    </div>
+                </div>
+
                 </div>
 
 
 
-        <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
-        <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
-
-
-        <div id="container" class="relative">
-            <div id="logo-container">
-                <input
-                type="checkbox"
-                class="toggle border-blue-500 bg-blue-500 [--tglbg:yellow] hover:bg-blue-700 "
-                 id="detail_mode" name="detail_mode"/>
-            </div>
-
-            <button id="toggle-overlay" class="btn btn-xs btn-accent mt-24 ">[-]</button>
-
-            <div id="overlay" class="absolute top-2 right-0 hidden">
-            </div>
-        </div>
-
-        <div id="chat-box" class="chat-box">
-            <div id="chat-messages">
-                <!-- Chat messages will be appended here -->
-            </div>
-            <div class="chat-input">
-                <textarea id="chatbox" class="textarea textarea-bordered" placeholder="Type your prompt here..."></textarea>
-                <button id="send_prompt" class="btn btn-primary">Send</button>
-            </div>
-        </div>
-        <script type="module" src="{% static 'js/script.js' %}"></script>
+                <div id="chat-box" class="chat-box">
+                    <div id="chat-messages">
+                        <!-- Chat messages will be appended here -->
+                    </div>
+                    <div class="chat-input">
+                        <textarea id="chatbox" class="textarea textarea-bordered" placeholder="Type your prompt here..."></textarea>
+                        <button id="send_prompt" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
     </body>
 </html>
 <script>
   mapboxgl.accessToken = "{{ mapbox_token|safe }}";
   console.log("Mapbox token:", mapboxgl.accessToken);
 </script>
+<script type="module" src="{% static 'js/script.js' %}"></script>
 
 {% endblock %}
 

@@ -44,6 +44,9 @@ function getInputs() {
     inputs['building_origin'] = origin;
     inputs['building_vertices'] = vertices;
 
+
+
+
   }
 
   formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
@@ -101,17 +104,6 @@ function meshToThreejs(mesh) {
   const loader = new THREE.BufferGeometryLoader();
   const geometry = loader.parse(mesh.toThreejsJSON());
 
-  // Get accurate scale factor from turf-based east offset
-  const mercOrigin = new mapboxgl.MercatorCoordinate(
-    PROJECT_POLYLINE.origin.x,
-    PROJECT_POLYLINE.origin.y
-  );
-  const originLngLat = mercOrigin.toLngLat();
-
-  const mercatorPerMeter = getMercatorUnitsPerMeterAtOrigin(originLngLat);
-
-  // geometry.scale(mercatorPerMeter, mercatorPerMeter, mercatorPerMeter);
-  console.log('Mercator scale factor:', mercatorPerMeter);
 
 
   const material = new THREE.MeshBasicMaterial({
@@ -325,12 +317,15 @@ function init() {
       saveSiteGeometry(feature.geometry);
       clearSiteLabels();
       showSiteBoundaryDimensions(feature);
+      compute();
+
     } else {
       buildingPolygonId = feature.id;
       handleBuildingPath(feature.geometry);
       updateBuildingSource(feature.geometry);
       clearBuildingLabels();
       showBuildingPathDimensions(feature.geometry);
+      compute();
     }
   });
 
@@ -549,6 +544,7 @@ function handleBuildingPath(geometry) {
     building_origin: formatted.origin,
     building_vertices: formatted.vertices
   });
+  compute(); // Recompute after saving
 }
 
 
@@ -765,6 +761,7 @@ function registerInputListeners() {
   document.querySelectorAll('#overlay input, #overlay textarea').forEach(input => {
     // Trigger recompute when user changes value manually
     input.addEventListener('input', onSliderChange, false);
+
     input.addEventListener('change', onSliderChange, false);
 
     // Optional: still keep mouse/touch if needed

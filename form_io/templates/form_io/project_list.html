@@ -195,7 +195,101 @@ document.addEventListener("DOMContentLoaded", () => {
 
     map.addControl(draw);
 
+    let gridAdded = false;
+
+    map.on('draw.modechange', (e) => {
+      if (e.mode === 'draw_polygon') {
+        map.once('click', (event) => {
+          const startLngLat = [event.lngLat.lng, event.lngLat.lat];
+          const bounds = createBoundsAround(startLngLat, 0.002); // ~200m buffer
+          const grid = generateGrid(bounds, 0.0001); // ~10m spacing
+          if (!map.getSource('grid-lines')) {
+            map.addSource('grid-lines', { type: 'geojson', data: grid });
+            map.addLayer({
+              id: 'grid-lines-layer',
+              type: 'line',
+              source: 'grid-lines',
+              paint: {
+                'line-color': '#ccc',
+                'line-width': 0.5
+              }
+            });
+          } else {
+            map.getSource('grid-lines').setData(grid);
+          }
+          gridAdded = true;
+        });
+      } else if (gridAdded) {
+        map.removeLayer('grid-lines-layer');
+        map.removeSource('grid-lines');
+        gridAdded = false;
+      }
+    });
+
+    // helper
+    function createBoundsAround(center, buffer) {
+      const [lng, lat] = center;
+      return [lng - buffer, lat - buffer, lng + buffer, lat + buffer];
+    }
+
+function snapToGrid(coord, gridSize = 0.0001) {
+  const snappedLng = Math.round(coord[0] / gridSize) * gridSize;
+  const snappedLat = Math.round(coord[1] / gridSize) * gridSize;
+  return [snappedLng, snappedLat];
+}
+
+function createBoundsAround(center, buffer) {
+  const [lng, lat] = center;
+  return [lng - buffer, lat - buffer, lng + buffer, lat + buffer];
+}
+
+function generateGrid(bounds, spacing = 0.0001) {
+  const features = [];
+  const [minLng, minLat, maxLng, maxLat] = bounds;
+
+  for (let lng = minLng; lng < maxLng; lng += spacing) {
+    features.push(turf.lineString([[lng, minLat], [lng, maxLat]]));
+  }
+  for (let lat = minLat; lat < maxLat; lat += spacing) {
+    features.push(turf.lineString([[minLng, lat], [maxLng, lat]]));
+  }
+  return turf.featureCollection(features);
+}
+
+const SnapPolygon = MapboxDraw.modes.draw_polygon;
+
+const DrawPolygonSnap = {
+  ...SnapPolygon,
+  clickAnywhere(state, e) {
+    e.lngLat = {
+      lng: snapToGrid([e.lngLat.lng], 0.0001)[0],
+      lat: snapToGrid([e.lngLat.lat], 0.0001)[1]
+    };
+    return SnapPolygon.clickAnywhere.call(this, state, e);
+  },
+  onMouseMove(state, e) {
+    const snapped = snapToGrid([e.lngLat.lng, e.lngLat.lat], 0.0001);
+    e.lngLat = { lng: snapped[0], lat: snapped[1] };
+    return SnapPolygon.onMouseMove.call(this, state, e);
+  }
+};
+
+
+
+    map.on('draw.update', (e) => {
+      const feature = e.features[0];
+      if (feature.geometry.type === 'Polygon') {
+        feature.geometry.coordinates[0] = feature.geometry.coordinates[0].map(coord =>
+          snapToGrid(coord, 0.0001)
+        );
+        draw.delete(feature.id);
+        draw.add(feature);
+      }
+    });
+
+
     map.on('load', () => {
+      
       map.addLayer({
         id: '3d-buildings',
         source: 'composite',
@@ -225,16 +319,16 @@ document.addEventListener("DOMContentLoaded", () => {
       map.flyTo({ center: [lng, lat], zoom: 16 });
     });
 
-    // On draw complete
-map.on('draw.create', (e) => {
-  updateEdgeLabels();
-});
+        // On draw complete
+    map.on('draw.create', (e) => {
+      updateEdgeLabels();
+    });
 
 
-    map.on('draw.update', updateEdgeLabels);
-    map.on('draw.selectionchange', updateEdgeLabels);
-    map.on('draw.delete', clearEdgeLabels);
-  }
+        map.on('draw.update', updateEdgeLabels);
+        map.on('draw.selectionchange', updateEdgeLabels);
+        map.on('draw.delete', clearEdgeLabels);
+      }
 
 
   function updateEdgeLabels() {
@@ -347,6 +441,9 @@ if (response.ok) {
     const cookieValue = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
     return cookieValue ? cookieValue.pop() : '';
   }
+
+
+
 </script>
 
 
