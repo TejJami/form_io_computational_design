@@ -37,13 +37,7 @@ function getInputs() {
   });
 
   if (PROJECT_POLYLINE) {
-    inputs['envelope_origin'] = '0,0,0';
     inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(PROJECT_POLYLINE);
-  }
-
-  if (site_Envelope) {
-    inputs['site_origin'] = '0,0,0'; // assume relative to first point
-    inputs['site_vertices'] = formatSiteBoundaryWithTurfDistances(site_Envelope);
   }
 
   return inputs;
@@ -182,11 +176,11 @@ function collectResults(json) {
 }
 
 
-// Global variables for site and building polygons
+// Global variables for site and Envelope polygons
 let sitePolygonId = null;
-let buildingPolygonId = null;
+let EnvelopePolygonId = null;
 let siteLabelMarkers = [];
-let buildingLabelMarkers = [];
+let EnvelopeLabelMarkers = [];
 
 function init() {
   const siteBounds = getBoundsFromSiteGeometry(site_Envelope);
@@ -239,33 +233,33 @@ function init() {
       // sitePolygonId = addedSite[0];
     }
 
-    // Building layer and polygon
-    const buildingFeature = siteenvelopeToGeoJSON(PROJECT_POLYLINE);
-    if (buildingFeature) {
-      buildingFeature.properties = { role: 'building' };
+    // Envelope layer and polygon
+    const EnvelopeFeature = siteenvelopeToGeoJSON(PROJECT_POLYLINE);
+    if (EnvelopeFeature) {
+      EnvelopeFeature.properties = { role: 'Envelope' };
 
-      map.addSource('building', {
+      map.addSource('Envelope', {
         type: 'geojson',
-        data: buildingFeature
+        data: EnvelopeFeature
       });
 
       map.addLayer({
-        id: 'building-boundary',
+        id: 'Envelope-boundary',
         type: 'fill',
-        source: 'building',
+        source: 'Envelope',
         paint: {
           'fill-color': '#f97316',
           'fill-opacity': 0.5
         }
       });
 
-      const addedBuilding = draw.add(buildingFeature);
-      buildingPolygonId = addedBuilding[0];
-      clearBuildingLabels();
-      showSiteEvnelopeDimensions(buildingFeature.geometry);
+      const addedEnvelope = draw.add(EnvelopeFeature);
+      EnvelopePolygonId = addedEnvelope[0];
+      clearEnvelopeLabels();
+      showSiteEvnelopeDimensions(EnvelopeFeature.geometry);
     }
 
-    // 3D buildings
+    // 3D Envelopes
     map.addLayer({
       id: '3d-buildings',
       source: 'composite',
@@ -305,10 +299,10 @@ function init() {
       compute();
 
     } else {
-      buildingPolygonId = feature.id;
+      EnvelopePolygonId = feature.id;
       handleSiteEvnelope(feature.geometry);
-      updateBuildingSource(feature.geometry);
-      clearBuildingLabels();
+      updateEnvelopeSource(feature.geometry);
+      clearEnvelopeLabels();
       showSiteEvnelopeDimensions(feature.geometry);
       compute();
     }
@@ -323,10 +317,10 @@ function init() {
       saveSiteGeometry(feature.geometry);
       clearSiteLabels();
       showSiteBoundaryDimensions(feature);
-    } else if (role === 'building') {
+    } else if (role === 'Envelope') {
       handleSiteEvnelope(feature.geometry);
-      updateBuildingSource(feature.geometry);
-      clearBuildingLabels();
+      updateEnvelopeSource(feature.geometry);
+      clearEnvelopeLabels();
       showSiteEvnelopeDimensions(feature.geometry);
     }
   });
@@ -338,28 +332,28 @@ function init() {
         sitePolygonId = null;
         clearSiteLabels();
         console.warn('[Form IO] Site Bounds deleted');
-      } else if (f.id === buildingPolygonId) {
-        buildingPolygonId = null;
-        clearBuildingLabels();
+      } else if (f.id === EnvelopePolygonId) {
+        EnvelopePolygonId = null;
+        clearEnvelopeLabels();
         console.warn('[Form IO] site_envelope deleted');
       }
     });
   });
 
-  // Helper: update building geojson source
-  function updateBuildingSource(geometry) {
+  // Helper: update Envelope geojson source
+  function updateEnvelopeSource(geometry) {
     const updatedFeature = {
       type: "Feature",
       geometry: geometry,
-      properties: { role: "building" }
+      properties: { role: "Envelope" }
     };
     const updatedGeojson = {
       type: "FeatureCollection",
       features: [updatedFeature]
     };
-    const buildingSource = map.getSource('building');
-    if (buildingSource) {
-      buildingSource.setData(updatedGeojson);
+    const EnvelopeSource = map.getSource('Envelope');
+    if (EnvelopeSource) {
+      EnvelopeSource.setData(updatedGeojson);
     }
   }
 }
@@ -943,15 +937,15 @@ function showSiteBoundaryDimensions(feature) {
 }
 
 
-function clearBuildingLabels() {
-  buildingLabelMarkers.forEach(m => m.remove());
-  buildingLabelMarkers = [];
+function clearEnvelopeLabels() {
+  EnvelopeLabelMarkers.forEach(m => m.remove());
+  EnvelopeLabelMarkers = [];
 }
 
 function showSiteEvnelopeDimensions(geometry) {
   if (!geometry || geometry.type !== 'Polygon') return;
 
-  clearBuildingLabels();
+  clearEnvelopeLabels();
 
   const coords = geometry.coordinates[0];
   for (let i = 0; i < coords.length - 1; i++) {
@@ -969,18 +963,18 @@ function showSiteEvnelopeDimensions(geometry) {
       .setLngLat(mid)
       .addTo(map);
 
-    buildingLabelMarkers.push(marker);
+    EnvelopeLabelMarkers.push(marker);
   }
 
-  // Set building area in UI
+  // Set Envelope area in UI
   const area = turf.area(geometry);
   const areaText = area > 10000
     ? `${(area / 10000).toFixed(2)} ha`
     : `${area.toFixed(1)} m²`;
 
-  const buildingLabelEl = document.getElementById('building-area-label');
-  if (buildingLabelEl) {
-    buildingLabelEl.innerText = `Building Area: ${areaText}`;
+  const EnvelopeLabelEl = document.getElementById('Envelope-area-label');
+  if (EnvelopeLabelEl) {
+    EnvelopeLabelEl.innerText = `Envelope Area: ${areaText}`;
   }
 }
 
