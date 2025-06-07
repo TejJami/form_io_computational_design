@@ -26,33 +26,29 @@ init()
 
 function getInputs() {
   const inputs = {};
-  document.querySelectorAll('#overlay input').forEach(input => {
+  document.querySelectorAll('#customise-inputs input, #customise-inputs textarea').forEach(input => {
     const id = input.id;
     if (input.type === 'checkbox') {
       inputs[id] = input.checked ? 1 : 0;
     } else {
-      inputs[id] = Number(input.value);
+      const parsed = Number(input.value);
+      inputs[id] = isNaN(parsed) ? input.value : parsed;
     }
   });
 
-  // Include flattened building path
   if (PROJECT_POLYLINE) {
-    // Use Turf-accurate coordinates
-    const origin = '0,0,0';
-    const vertices = formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
-
-    inputs['building_origin'] = origin;
-    inputs['building_vertices'] = vertices;
-
-
-
-
+    inputs['building_origin'] = '0,0,0';
+    inputs['building_vertices'] = formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
   }
 
-  formatBuildingPathWithTurfDistances(PROJECT_POLYLINE);
+  if (PROJECT_SITE) {
+    inputs['site_origin'] = '0,0,0'; // assume relative to first point
+    inputs['site_vertices'] = formatSiteBoundaryWithTurfDistances(PROJECT_SITE);
+  }
 
   return inputs;
 }
+
 
 
 async function compute() {
@@ -217,13 +213,6 @@ function init() {
     defaultMode: 'draw_polygon'
   });
   map.addControl(draw, 'top-right');
-
-  // Draw Rectangle Button
-  const drawRectangleBtn = document.createElement('button');
-  drawRectangleBtn.innerText = "Draw Rectangle";
-  drawRectangleBtn.className = 'btn btn-primary m-2';
-  drawRectangleBtn.onclick = () => draw.changeMode('draw_polygon');
-  document.getElementById('overlay').prepend(drawRectangleBtn);
 
   map.on('load', () => {
     // Site layer and polygon
@@ -758,16 +747,14 @@ function onSliderChange() {
 
 // Dynamically attach events to all inputs in overlay
 function registerInputListeners() {
-  document.querySelectorAll('#overlay input, #overlay textarea').forEach(input => {
-    // Trigger recompute when user changes value manually
-    input.addEventListener('input', onSliderChange, false);
-
-    input.addEventListener('change', onSliderChange, false);
-
-    // Optional: still keep mouse/touch if needed
-    input.addEventListener('mouseup', onSliderChange, false);
-    input.addEventListener('touchend', onSliderChange, false);
-  });
+  document
+    .querySelectorAll('#customise-inputs input, #customise-inputs textarea, #customise-inputs select')
+    .forEach(input => {
+      input.addEventListener('input', onSliderChange, false);
+      input.addEventListener('change', onSliderChange, false);
+      input.addEventListener('mouseup', onSliderChange, false);
+      input.addEventListener('touchend', onSliderChange, false);
+    });
 }
 
 
@@ -841,57 +828,46 @@ function extractInputsFromGrasshopperData(data) {
  * @param {Array} inputs - Array of input objects with { name, default, type }
  */
 function populateInputsUI(inputs) {
-  console.log(inputs);
-  const overlay = document.getElementById('overlay');
-
-  // Clear any existing content in the overlay panel
-  overlay.innerHTML = '';
-
-  const form = document.createElement('div');
-  form.classList.add('p-4', 'bg-base-200');
-
-  const grid = document.createElement('div');
-  grid.classList.add('grid', 'grid-cols-1', 'gap-4');
+  const customiseContainer = document.getElementById('customise-inputs');
+  customiseContainer.innerHTML = ''; // Clear previous inputs
 
   inputs.forEach(input => {
     const control = document.createElement('div');
-    control.classList.add('form-control');
+    control.classList.add('form-control', 'text-xs'); // smaller text
 
     const label = document.createElement('label');
-    label.classList.add('label');
+    label.classList.add('label', 'text-xs', 'font-medium', 'text-gray-500');
     label.textContent = input.name;
 
     let inputField;
 
-    // For multiline strings like building_vertices, use a <textarea>
     if (input.type === 'text' && typeof input.default === 'string' && input.default.includes(';')) {
       inputField = document.createElement('textarea');
-      inputField.rows = 3;
-      inputField.readOnly = true;  // Optional: protect system-generated inputs
+      inputField.rows = 2;
+      inputField.classList.add('textarea', 'textarea-bordered', 'textarea-xs');
+      inputField.readOnly = true;
     } else {
       inputField = document.createElement('input');
       inputField.type = input.type;
+      inputField.classList.add('input', 'input-bordered', 'input-xs');
       if (input.type === 'text') {
-        inputField.readOnly = true; // Optional: prevent editing string inputs
+        inputField.readOnly = true;
       }
     }
 
     inputField.id = input.name;
     inputField.name = input.name;
     inputField.value = input.default;
-    inputField.classList.add('input', 'input-bordered');
 
     control.appendChild(label);
     control.appendChild(inputField);
-    grid.appendChild(control);
+    customiseContainer.appendChild(control);
   });
 
-  form.appendChild(grid);
-  overlay.appendChild(form);
-
-  // Attach slider/input listeners again
   registerInputListeners();
 }
+
+
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -900,11 +876,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ✅ Load GH UI and compute when ready
   await fetchGrasshopperInputs(data.definition); 
-});
-
-// Ensure the compute function is bound to the button click
-document.getElementById('toggle-overlay').addEventListener('click', () => {
-  document.getElementById('overlay').classList.toggle('hidden');
 });
 
 let labelMarkers = [];
@@ -1074,5 +1045,54 @@ function formatBuildingPathWithTurfDistances(path) {
   }).join(';');
 
   console.log('[Form IO] Turf-based relative building path string:', result);
+  return result;
+}
+
+
+/**
+ * Converts site GeoJSON polygon to a semicolon-separated "x,y,z" string in meters,
+ * relative to the first vertex (used as origin).
+ *
+ * @param {Object} siteGeoJSON - GeoJSON FeatureCollection with one Polygon feature.
+ * @returns {string} - String of "x,y,z" coordinate entries separated by semicolons.
+ */
+function formatSiteBoundaryWithTurfDistances(siteGeoJSON) {
+  if (
+    !siteGeoJSON ||
+    siteGeoJSON.type !== 'FeatureCollection' ||
+    !Array.isArray(siteGeoJSON.features) ||
+    siteGeoJSON.features.length === 0
+  ) {
+    console.warn("Invalid or missing site GeoJSON.");
+    return '';
+  }
+
+  const polygon = siteGeoJSON.features[0].geometry;
+  if (!polygon || polygon.type !== 'Polygon') {
+    console.warn("Site geometry is not a polygon.");
+    return '';
+  }
+
+  const coords = polygon.coordinates[0];
+  if (!coords || coords.length < 3) {
+    console.warn("Site polygon has too few coordinates.");
+    return '';
+  }
+
+  const originLngLat = coords[0];
+
+  const result = coords.map(pt => {
+    const eastRef = [pt[0], originLngLat[1]];
+    const xDist = turf.distance(originLngLat, eastRef, { units: 'meters' });
+    const x = pt[0] >= originLngLat[0] ? xDist : -xDist;
+
+    const northRef = [originLngLat[0], pt[1]];
+    const yDist = turf.distance(originLngLat, northRef, { units: 'meters' });
+    const y = pt[1] >= originLngLat[1] ? yDist : -yDist;
+
+    return `${x.toFixed(3)},${y.toFixed(3)},0.000`; // z=0 for flat 2D site
+  }).join(';');
+
+  console.log('[Form IO] Turf-based site boundary string:', result);
   return result;
 }

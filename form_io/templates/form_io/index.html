@@ -118,10 +118,11 @@
         </style>
     </head>
     <body>
+        <!-- PROJECT INFO CONTAINER -->
         <div id="project-info"
             class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg m-0 p-0"
             style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 20vw; max-width: 20vw;">
-                <div class="card-body p-0">
+            <div class="card-body p-0">
                     <!-- Back Button --> 
                     <div class="flex justify-between items-start">
                         <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
@@ -137,75 +138,104 @@
                     <p class="text-sm text-gray-600 capitalize mt-1">
                     {{ project.type }} project
                     </p>
-                </div>
-                </div>
-                <div id="area-display" style="position: absolute;bottom: 4px;left: 4px; background: white;border-radius: 6px;padding: 5px 5px;z-index: 999;
+            </div>
+        </div>
+        
+        <!-- AREA AT BOTTUM LEFT CONTAINER -->
+        <div id="area-display" style="position: absolute;bottom: 4px;left: 4px; background: white;border-radius: 6px;padding: 5px 5px;z-index: 999;
                     pointer-events: none;" class="text-sm text-gray-700">
                     <div id="site-area-label">Site Area: --</div>
                     <div id="building-area-label">Building Area: --</div>
-                </div>
+        </div>
 
-                <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
-                <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
+        <!-- LOADER CONTAINER -->
+        <div id="loader" class="border-4 border-gray-300 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
+      
+        <!-- THREEJS MAP CONTAINER -->
+        <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
-                <div id="container" class="relative">
-                    <button id="toggle-overlay" class="btn btn-xs btn-accent mt-24 ">[-]</button>
-                    <div id="overlay" class="absolute top-2 right-0 hidden">
-                    </div>
-                </div>
+        <!-- TOOLBAR CONTAINER -->
+        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] max-h-[50vh] overflow-y-auto space-y-2">
+        
+            <!-- SITE BOUNDARY TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="site-tools" class="card bg-white border-0 rounded-none">
+                <p class="text-sm text-gray-600 p-1">
+                <iconify-icon icon="mdi:map-marker-radius"></iconify-icon>
+                Boundary Tools
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div class="flex flex-wrap gap-2 p-1">
+                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Site Curve">
+                <iconify-icon icon="ix:select-alt"></iconify-icon>
+                </button>
+                <button id="btn-site-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Polygon">
+                <iconify-icon icon="ph:polygon"></iconify-icon>
+                </button>
+                <button id="btn-site-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Rectangle">
+                <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                </button>
+                <button id="btn-site-delete" class="btn btn-error btn-outline btn-sm" title="Delete Site Curve">
+                <iconify-icon icon="material-symbols-light:delete-outline"></iconify-icon>
+                </button>
+            </div>
+            </div>
+        </div>
 
-                <!-- TOOLBAR CONTAINER -->
-                <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] space-y-2">
+        <!-- BUILDING TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="building-tools" class="card bg-white border-0 rounded-none">
+                <p class="text-sm text-gray-600 p-1">
+                <iconify-icon icon="mdi:building"></iconify-icon>
+                Building Tools
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div class="flex flex-wrap gap-2 p-1">
+                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Building">
+                <iconify-icon icon="ix:select-alt"></iconify-icon>
+                </button>
+                <button id="btn-bldg-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Polygon">
+                <iconify-icon icon="ph:polygon"></iconify-icon>
+                </button>
+                <button id="btn-bldg-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Rectangle">
+                <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                </button>
+                <button id="btn-bldg-delete" class="btn btn-error btn-outline btn-sm" title="Delete Building">
+                <iconify-icon icon="material-symbols-light:delete-outline-rounded"></iconify-icon>
+                </button>
+            </div>
+            </div>
+        </div>
 
-                <!-- BUILDING TOOLS -->
-                <div id="building-tools" class="card bg-white border border-base-300 shadow-md rounded-lg">
-                    <p class="text-sm text-gray-600 p-2">
-                        <iconify-icon icon="mdi:building"></iconify-icon>
-                        Building Tools</p>
-                    <div class="flex flex-wrap gap-2 p-2">
-                    <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Building">
-                        <iconify-icon icon="ix:select-alt"></iconify-icon>
-                    </button>
-                    <button id="btn-bldg-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Polygon">
-                        <iconify-icon icon="ph:polygon"></iconify-icon>
-                    </button>
-                    <button id="btn-bldg-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Rectangle">
-                        <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
-                    </button>
-                    <button id="btn-bldg-delete" class="btn btn-error btn-outline btn-sm " title="Delete Building">
-                        <iconify-icon icon="material-symbols-light:delete-outline-rounded"></iconify-icon>
-                    </button>
-                    </div>
-                </div>
+        <!-- CUSTOMISE TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="customise-tools" class="card bg-white border-0 rounded-none w-full">
+                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
+                <iconify-icon icon="mdi:tune-variant"></iconify-icon>
+                Tweak Building
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div id="customise-inputs" class="p-1 space-y-2 mt-1">
+                <!-- Injected Inputs -->
+            </div>
+            </div>
+        </div>
 
-                <!-- SITE BOUNDARY TOOLS -->
-                <div id="site-tools" class="card bg-white border border-base-300 shadow-md rounded-lg">
-                        
-                    <p class="text-sm text-gray-600 p-2">
-                    <iconify-icon icon="mdi:map-marker-radius"></iconify-icon>
-                        Boundary Tools 
-                    </p>
-                    <div class="flex flex-wrap gap-2 p-2">
-                    <button id="btn-bldg-select" class="btn btn-neutral btn-outline  btn-sm" title="Select Site Curve">
-                        <iconify-icon icon="ix:select-alt"></iconify-icon>
-                    </button>
-                    <button id="btn-site-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Polygon">
-                        <iconify-icon icon="ph:polygon"></iconify-icon>
-                    </button>
-                    <button id="btn-site-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Site Rectangle">
-                        <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
-                    </button>
-                    <button id="btn-site-delete" class="btn btn-error btn-outline btn-sm  " title="Delete Site Curve">
-                        <iconify-icon icon="material-symbols-light:delete-outline"></iconify-icon>
-                    </button>
-                    </div>
-                </div>
+        </div>
 
-                </div>
-
-
-
-                <div id="chat-box" class="chat-box">
+        <div id="chat-box" class="chat-box">
                     <div id="chat-messages">
                         <!-- Chat messages will be appended here -->
                     </div>
@@ -213,7 +243,8 @@
                         <textarea id="chatbox" class="textarea textarea-bordered" placeholder="Type your prompt here..."></textarea>
                         <button id="send_prompt" class="btn btn-primary">Send</button>
                     </div>
-                </div>
+        </div>
+
     </body>
 </html>
 <script>
