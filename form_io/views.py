@@ -334,3 +334,13 @@ def save_project_inputs(request, project_id):
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=400)
 
+from django.http import JsonResponse, HttpResponseBadRequest
+
+def get_project_polyline(request, project_id):
+    try:
+        project = Project.objects.get(pk=project_id)
+        return JsonResponse({
+            "project_polyline": project.site_envelope  # Assuming this is a JSONField
+        })
+    except Project.DoesNotExist:
+        return HttpResponseBadRequest("Invalid project ID")

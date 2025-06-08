@@ -21,7 +21,8 @@ console.log('Loaded rhino3dm.')
 let threeScene, threeCamera, threeRenderer
 let map
 let meshb64Mesh, meshoutMesh
-let draw;
+let draw
+let isEnvelopeSelectable = false;
 
 
 init()
@@ -128,6 +129,9 @@ function replaceCurrentMesh(mesh, type) {
     meshoutMesh = mesh
     threeScene.add(meshoutMesh)
   }
+  console.log(`[Form IO] Replaced current mesh with type: ${type}`)
+  map.triggerRepaint(); // Explicitly force re-render
+
 }
 
 function decodeItem(item) {
@@ -200,34 +204,59 @@ function init() {
   });
 
   // Initialize MapboxDraw
-  const draw = new MapboxDraw({
-    displayControlsDefault: false,
-    defaultMode: 'simple_select'
+  draw = new MapboxDraw({
+    displayControlsDefault: false
   });
   map.addControl(draw);
 
-  document.getElementById('btn-envelope-polygon').addEventListener('click', () => {
-    draw.changeMode('draw_polygon');
-  });
+
+document.getElementById('btn-envelope-polygon').addEventListener('click', () => {
+  // Safely enter draw_polygon mode
+  draw.changeMode('draw_polygon', { featureId: undefined });
+  console.log('[Form IO] Drawing mode: draw_polygon activated');
+});
+
 
   document.getElementById('btn-envelope-delete').addEventListener('click', () => {
+    if (!isEnvelopeSelectable) {
+      showToast('delete-blocked', 'Activate Envelope Selection to delete', 'warning');
+      return;
+    }
+
     if (EnvelopePolygonId && draw) {
-      // Remove from map
+      // Remove polygon from map
       draw.delete(EnvelopePolygonId);
       EnvelopePolygonId = null;
 
-      // Clear visual markers
+      // Clear visual markers and inputs
       clearEnvelopeLabels();
-
-      // Clear related input fields in the UI
       document.getElementById('envelope_vertices').value = '';
-
-      PROJECT_POLYLINE = ""
+      PROJECT_POLYLINE = "";
       saveSiteEvnelope('');
-      
-      console.warn('[Form IO] Envelope polygon deleted via custom button and UI cleared');
+
+      removeToast('delete-blocked');
+      console.warn('[Form IO] Envelope polygon deleted via UI');
     }
   });
+
+
+  document.getElementById('btn-bldg-select').addEventListener('click', () => {
+    const button = document.getElementById('btn-bldg-select');
+    isEnvelopeSelectable = !isEnvelopeSelectable;
+
+    if (isEnvelopeSelectable) {
+      button.classList.add('btn-active');
+      draw.changeMode('simple_select');
+      showToast('envelope-select-toast', 'Envelope selection mode', 'neutral');
+      console.log('[Form IO] Envelope selection mode ON');
+    } else {
+      button.classList.remove('btn-active');
+      draw.changeMode('simple_select', { featureIds: [] });
+      removeToast('envelope-select-toast');
+      console.log('[Form IO] Envelope selection mode OFF');
+    }
+  });
+
 
 
 
@@ -309,6 +338,14 @@ function init() {
     map.addLayer(customLayer);
   });
 
+  map.on('click', (e) => {
+    if (!isEnvelopeSelectable) {
+      draw.changeMode('simple_select');
+      draw.changeMode('simple_select', { featureIds: [] });
+ // Ensure selection is cleared
+    }
+  });
+
   // Create handler
   map.on('draw.create', function (e) {
     const feature = e.features[0];
@@ -319,7 +356,7 @@ function init() {
     if (role === 'site') {
       sitePolygonId = feature.id;
       saveSiteGeometry(feature.geometry);
-      compute();
+
 
     } else {
       EnvelopePolygonId = feature.id;
@@ -327,7 +364,7 @@ function init() {
       updateEnvelopeSource(feature.geometry);
       clearEnvelopeLabels();
       showSiteEvnelopeDimensions(feature.geometry);
-      compute();
+
     }
   });
 
@@ -379,6 +416,28 @@ function init() {
       EnvelopeSource.setData(updatedGeojson);
     }
   }
+
+map.on('draw.selectionchange', (e) => {
+  const selected = e.features?.[0];
+
+  if (!isEnvelopeSelectable || !selected || selected.properties?.role !== 'Envelope') {
+    draw.changeMode('simple_select', { featureIds: [] }); // Clear selection
+    console.log('[Form IO] Selection blocked or invalid role');
+    return;
+  }
+
+  const featureId = selected.id;
+
+  console.log('[Form IO] Envelope polygon selected:', featureId);
+
+  // ✅ Switch to direct_select to allow editing immediately
+  draw.changeMode('direct_select', { featureId });
+
+});
+
+
+
+
 }
 
 
@@ -540,13 +599,14 @@ function handleSiteEvnelope(geometry) {
 
   saveSiteEvnelope(relativePath); // Persist to backend
 
+  refreshProjectPolyline()
   // ✅ Trigger updateInputs after saving
   const formatted = formatSiteEvnelopeAsStrings(relativePath);
+  console.log('[Form IO] Formatted envelope vertices:', formatted);
   updateInputs({
-    envelope_origin: formatted.origin,
     envelope_vertices: formatted.vertices
   });
-  compute(); // Recompute after saving
+  // compute(); // Recompute after saving
 }
 
 
@@ -556,13 +616,12 @@ function saveSiteEvnelope(SiteEvnelope) {
   let payload;
 
   if (!SiteEvnelope) {
-    // Send blank values for both site_envelope and envelope inputs
     payload = {
       inputs: {
         envelope_origin: '',
         envelope_vertices: ''
       },
-      site_envelope: ''  // blank string instead of null
+      site_envelope: ''
     };
   } else {
     payload = {
@@ -581,10 +640,13 @@ function saveSiteEvnelope(SiteEvnelope) {
   }).then(res => {
     if (!res.ok) throw new Error('Save failed');
     console.log('[Form IO] Envelope updated successfully');
+    PROJECT_POLYLINE = null;  // ✅ Reset here
+    console.log('[Form IO] PROJECT_POLYLINE reset after save.');
   }).catch(err => {
     console.error('[Form IO] Failed to save envelope:', err);
   });
 }
+
 
 
 
@@ -654,16 +716,31 @@ function hideLoader() {
 }
 
 function updateInputs(parameters) {
-    // Loop through parameters and update corresponding input fields
-    Object.keys(parameters).forEach(key => {
-        const inputElement = document.getElementById(key); // Ensure IDs match backend keys
-        if (inputElement) {
-            inputElement.value = parameters[key]; // Update input value directly
-        }
-    });
-    // Trigger compute after updating inputs
-    onSliderChange();
+  Object.keys(parameters).forEach(key => {
+    const inputElement = document.getElementById(key);
+    if (inputElement) {
+      inputElement.value = parameters[key];
     }
+
+    // ✅ Rehydrate PROJECT_POLYLINE if envelope_vertices is updated
+    if (key === 'envelope_vertices' && typeof parameters[key] === 'string') {
+      const points = parameters[key].split(';').map(s => {
+        const [x, y, z] = s.split(',').map(Number);
+        return { x, y, z };
+      });
+      if (points.length > 1) {
+        PROJECT_POLYLINE = {
+          origin: { x: 0, y: 0, z: 0 },  // this is what was used during save
+          points: points
+        };
+        console.log('[Form IO] Reconstructed PROJECT_POLYLINE from envelope_vertices input');
+      }
+    }
+  });
+
+  onSliderChange(); // Triggers recompute
+}
+
 
     document.getElementById('send_prompt').addEventListener('click', async () => {
         const chatbox = document.getElementById('chatbox');
@@ -1124,3 +1201,44 @@ function formatSiteBoundaryWithTurfDistances(siteGeoJSON) {
   return result;
 }
 
+/**
+ * Displays a persistent toast message until removed manually.
+ * @param {string} id - A unique ID for the toast (to target it later).
+ * @param {string} message - Message to display.
+ * @param {string} type - 'info', 'success', 'error', or 'warning'
+ */
+function showToast(id, message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  // Prevent duplicate toasts with the same ID
+  if (document.getElementById(id)) return;
+  console.log(`[Form IO] Toast shown: ${id} - ${message}`);
+  const toast = document.createElement('div');
+  toast.className = `alert alert-${type}`;
+  toast.id = id;
+  toast.innerHTML = `<span>${message}</span>`;
+
+  container.appendChild(toast);
+}
+
+/**
+ * Removes a toast by its unique ID.
+ * @param {string} id - The toast ID to remove.
+ */
+function removeToast(id) {
+  const toast = document.getElementById(id);
+  if (toast) toast.remove();
+}
+
+async function refreshProjectPolyline() {
+  try {
+    const res = await fetch(`/api/projects/${PROJECT_ID}/get_polyline/`);
+    if (!res.ok) throw new Error('Fetch failed');
+    const json = await res.json();
+    PROJECT_POLYLINE = json.project_polyline;
+    console.log('[Form IO] PROJECT_POLYLINE refreshed from backend');
+  } catch (e) {
+    console.error('Failed to refresh polyline:', e);
+  }
+}
