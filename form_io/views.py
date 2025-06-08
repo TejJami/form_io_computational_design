@@ -274,8 +274,8 @@ def project_detail(request, project_id):
     return render(request, "form_io/index.html", {
         "project": project,
         "project_inputs": json.dumps(project.inputs),
-        "site_Envelope": json.dumps(project.site_bounds),
-        "project_polyline": json.dumps(project.site_envelope),
+        "DJ_SITE_BOUNDS": json.dumps(project.site_bounds),
+        "DJ_SITE_ENVELOPE": json.dumps(project.site_envelope),
         "mapbox_token": mapbox_token,
     })
 

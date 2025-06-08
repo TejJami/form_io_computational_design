@@ -39,8 +39,8 @@ function getInputs() {
     }
   });
 
-  if (PROJECT_POLYLINE) {
-    inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(PROJECT_POLYLINE);
+  if (DJ_SITE_ENVELOPE) {
+    inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(DJ_SITE_ENVELOPE);
   }
 
   return inputs;
@@ -189,7 +189,7 @@ let siteLabelMarkers = [];
 let EnvelopeLabelMarkers = [];
 
 function init() {
-  const siteBounds = getBoundsFromSiteGeometry(site_Envelope);
+  const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
   const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
   map = new mapboxgl.Map({
@@ -231,7 +231,7 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
       // Clear visual markers and inputs
       clearEnvelopeLabels();
       document.getElementById('envelope_vertices').value = '';
-      PROJECT_POLYLINE = "";
+      DJ_SITE_ENVELOPE = "";
       saveSiteEvnelope('');
 
       removeToast('delete-blocked');
@@ -262,13 +262,13 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
 
   map.on('load', () => {
     // Site layer and polygon
-    if (site_Envelope?.features?.length) {
-      const siteFeature = site_Envelope.features[0];
+    if (DJ_SITE_BOUNDS?.features?.length) {
+      const siteFeature = DJ_SITE_BOUNDS.features[0];
       siteFeature.properties = { role: 'site' };
 
       map.addSource('site', {
         type: 'geojson',
-        data: site_Envelope
+        data: DJ_SITE_BOUNDS
       });
 
       map.addLayer({
@@ -286,7 +286,7 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
     }
 
     // Envelope layer and polygon
-    const EnvelopeFeature = siteenvelopeToGeoJSON(PROJECT_POLYLINE);
+    const EnvelopeFeature = siteenvelopeToGeoJSON(DJ_SITE_ENVELOPE);
     if (EnvelopeFeature) {
       EnvelopeFeature.properties = { role: 'Envelope' };
 
@@ -468,8 +468,8 @@ const customLayer = {
     const m = new THREE.Matrix4().fromArray(matrix);
 
     // --- Origin from project polyline
-    const originX = PROJECT_POLYLINE?.origin?.x || 0;
-    const originY = PROJECT_POLYLINE?.origin?.y || 0;
+    const originX = DJ_SITE_ENVELOPE?.origin?.x || 0;
+    const originY = DJ_SITE_ENVELOPE?.origin?.y || 0;
     const mercOrigin = new mapboxgl.MercatorCoordinate(originX, originY);
     const originLngLat = mercOrigin.toLngLat();
 
@@ -479,7 +479,7 @@ const customLayer = {
 
     // --- Rotation around Z-axis from polyline direction
     let rotationZ = 0;
-    const points = PROJECT_POLYLINE?.points;
+    const points = DJ_SITE_ENVELOPE?.points;
     if (points?.length >= 2) {
       const dx = points[1].x - points[0].x;
       const dy = points[1].y - points[0].y;
@@ -610,42 +610,44 @@ function handleSiteEvnelope(geometry) {
 }
 
 
-function saveSiteEvnelope(SiteEvnelope) {
+/**
+ * Saves the site envelope to the backend.
+ * Once the envelope is saved, refreshes the project polyline and re-fetches inputs.
+ * This ensures inputs are always based on the latest geometry.
+ */
+/**
+ * Save only the site_envelope field to the backend.
+ * Does not modify or include `inputs` like envelope_origin or envelope_vertices.
+ * 
+ * @param {Object|string} SiteEvnelope - The site envelope object to save, or '' to clear it.
+ */
+async function saveSiteEvnelope(SiteEvnelope) {
   if (!PROJECT_ID) return;
 
-  let payload;
+  const payload = {
+    site_envelope: SiteEvnelope || ''
+  };
 
-  if (!SiteEvnelope) {
-    payload = {
-      inputs: {
-        envelope_origin: '',
-        envelope_vertices: ''
+  try {
+    const res = await fetch(`/api/projects/${PROJECT_ID}/save/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCSRFToken()
       },
-      site_envelope: ''
-    };
-  } else {
-    payload = {
-      inputs: getInputs(),
-      site_envelope: SiteEvnelope
-    };
-  }
+      body: JSON.stringify(payload)
+    });
 
-  fetch(`/api/projects/${PROJECT_ID}/save/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCSRFToken()
-    },
-    body: JSON.stringify(payload)
-  }).then(res => {
     if (!res.ok) throw new Error('Save failed');
-    console.log('[Form IO] Envelope updated successfully');
-    PROJECT_POLYLINE = null;  // ✅ Reset here
-    console.log('[Form IO] PROJECT_POLYLINE reset after save.');
-  }).catch(err => {
-    console.error('[Form IO] Failed to save envelope:', err);
-  });
+
+    DJ_SITE_ENVELOPE = null;
+    console.log('[Form IO] site_envelope saved successfully and local cache reset.');
+  } catch (err) {
+    console.error('[Form IO] Failed to save site_envelope:', err);
+  }
 }
+
+
 
 
 
@@ -722,18 +724,18 @@ function updateInputs(parameters) {
       inputElement.value = parameters[key];
     }
 
-    // ✅ Rehydrate PROJECT_POLYLINE if envelope_vertices is updated
+    // ✅ Rehydrate DJ_SITE_ENVELOPE if envelope_vertices is updated
     if (key === 'envelope_vertices' && typeof parameters[key] === 'string') {
       const points = parameters[key].split(';').map(s => {
         const [x, y, z] = s.split(',').map(Number);
         return { x, y, z };
       });
       if (points.length > 1) {
-        PROJECT_POLYLINE = {
+        DJ_SITE_ENVELOPE = {
           origin: { x: 0, y: 0, z: 0 },  // this is what was used during save
           points: points
         };
-        console.log('[Form IO] Reconstructed PROJECT_POLYLINE from envelope_vertices input');
+        console.log('[Form IO] Reconstructed DJ_SITE_ENVELOPE from envelope_vertices input');
       }
     }
   });
@@ -826,7 +828,6 @@ function preloadInputs(savedInputs) {
   console.log('[Form IO] Preloaded saved inputs for project:', PROJECT_ID);
 }
 
-// Save inputs to the backend (called after changes)
 async function saveInputsToProject(inputs) {
   if (!PROJECT_ID) return;
 
@@ -837,7 +838,7 @@ async function saveInputsToProject(inputs) {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCSRFToken(),
       },
-      body: JSON.stringify(inputs),
+      body: JSON.stringify({ inputs }),  // ✅ Correct structure
     });
     console.log('[Form IO] Inputs saved successfully for project:', PROJECT_ID);
   } catch (error) {
@@ -845,9 +846,12 @@ async function saveInputsToProject(inputs) {
   }
 }
 
+
 function onSliderChange() {
   console.log('[Form IO] Slider/input changed – recomputing...');
   compute();
+  saveInputsToProject(getInputs());
+  console.log('[Form IO] Inputs saved after slider change');
 }
 
 // Dynamically attach events to all inputs in overlay
@@ -1236,8 +1240,8 @@ async function refreshProjectPolyline() {
     const res = await fetch(`/api/projects/${PROJECT_ID}/get_polyline/`);
     if (!res.ok) throw new Error('Fetch failed');
     const json = await res.json();
-    PROJECT_POLYLINE = json.project_polyline;
-    console.log('[Form IO] PROJECT_POLYLINE refreshed from backend');
+    DJ_SITE_ENVELOPE = json.DJ_SITE_ENVELOPE;
+    console.log('[Form IO] DJ_SITE_ENVELOPE refreshed from backend');
   } catch (e) {
     console.error('Failed to refresh polyline:', e);
   }
