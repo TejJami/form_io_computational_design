@@ -576,38 +576,88 @@ function saveSiteGeometry(geometry) {
 
 function handleSiteEvnelope(geometry) {
   const coords = geometry.coordinates[0];
-  const originLngLat = coords[0];
 
-  const origin = mapboxgl.MercatorCoordinate.fromLngLat({
-    lng: originLngLat[0],
-    lat: originLngLat[1]
-  });
+  if (!coords || coords.length < 2) {
+    console.warn('[Form IO] Invalid envelope coordinates received.');
+    return;
+  }
 
-  const points = coords.map(([lng, lat]) => {
-    const point = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
-    return {
-      x: point.x - origin.x,
-      y: point.y - origin.y,
-      z: 0
+  let origin;
+  let points = [];
+
+  if (!PROJECT_POLYLINE || !PROJECT_POLYLINE.origin) {
+    // First-time envelope creation
+    const originLngLat = coords[0];
+    origin = mapboxgl.MercatorCoordinate.fromLngLat({
+      lng: originLngLat[0],
+      lat: originLngLat[1]
+    });
+
+    points = coords.map(([lng, lat], index) => {
+      const pt = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
+      const rel = {
+        x: pt.x - origin.x,
+        y: pt.y - origin.y,
+        z: 0
+      };
+      console.log(`[Form IO] Relative point ${index}:`, rel);
+      return rel;
+    });
+
+    PROJECT_POLYLINE = {
+      origin: { x: origin.x, y: origin.y, z: 0 },
+      points: points
     };
-  });
 
-  const relativePath = {
-    origin: { x: origin.x, y: origin.y, z: 0 },
-    points: points
+    console.log('[Form IO] New PROJECT_POLYLINE initialized:', PROJECT_POLYLINE);
+  } else {
+    // Editing existing envelope — reuse saved origin
+    const savedOrigin = PROJECT_POLYLINE.origin;
+    origin = new mapboxgl.MercatorCoordinate(savedOrigin.x, savedOrigin.y);
+
+    points = coords.map(([lng, lat], index) => {
+      const pt = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
+      const rel = {
+        x: pt.x - origin.x,
+        y: pt.y - origin.y,
+        z: 0
+      };
+      console.log(`[Form IO] Updated relative point ${index}:`, rel);
+      return rel;
+    });
+
+    PROJECT_POLYLINE.points = points;
+
+    console.log('[Form IO] PROJECT_POLYLINE updated with new points:', PROJECT_POLYLINE);
+  }
+
+  // Convert to absolute coordinates before saving to avoid double-scaling on reload
+  const absoluteEnvelope = {
+    origin: PROJECT_POLYLINE.origin,
+    points: PROJECT_POLYLINE.points.map((pt, idx) => {
+      const abs = {
+        x: pt.x + PROJECT_POLYLINE.origin.x,
+        y: pt.y + PROJECT_POLYLINE.origin.y,
+        z: pt.z || 0
+      };
+      console.log(`[Form IO] Absolute point ${idx}:`, abs);
+      return abs;
+    })
   };
 
-  saveSiteEvnelope(relativePath); // Persist to backend
+  console.log('[Form IO] Saving absolute site_envelope to backend:', absoluteEnvelope);
+  saveSiteEvnelope(absoluteEnvelope);
+  refreshProjectPolyline();
 
-  refreshProjectPolyline()
-  // ✅ Trigger updateInputs after saving
-  const formatted = formatSiteEvnelopeAsStrings(relativePath);
-  console.log('[Form IO] Formatted envelope vertices:', formatted);
+  const formatted = formatSiteEvnelopeAsStrings(PROJECT_POLYLINE);
+  console.log('[Form IO] Formatted envelope string for inputs:', formatted.vertices);
   updateInputs({
     envelope_vertices: formatted.vertices
   });
-  // compute(); // Recompute after saving
 }
+
+
+
 
 
 function saveSiteEvnelope(SiteEvnelope) {
@@ -722,20 +772,31 @@ function updateInputs(parameters) {
       inputElement.value = parameters[key];
     }
 
-    // ✅ Rehydrate PROJECT_POLYLINE if envelope_vertices is updated
     if (key === 'envelope_vertices' && typeof parameters[key] === 'string') {
       const points = parameters[key].split(';').map(s => {
         const [x, y, z] = s.split(',').map(Number);
         return { x, y, z };
       });
+
       if (points.length > 1) {
+        // 🔧 Assume these are already absolute points (backend sends them that way)
+        const originX = Math.min(...points.map(p => p.x));
+        const originY = Math.min(...points.map(p => p.y));
+        const adjusted = points.map(p => ({
+          x: p.x - originX,
+          y: p.y - originY,
+          z: p.z
+        }));
+
         PROJECT_POLYLINE = {
-          origin: { x: 0, y: 0, z: 0 },  // this is what was used during save
-          points: points
+          origin: { x: originX, y: originY, z: 0 },
+          points: adjusted
         };
-        console.log('[Form IO] Reconstructed PROJECT_POLYLINE from envelope_vertices input');
+
+        console.log('[Form IO] PROJECT_POLYLINE reconstructed from envelope_vertices:', PROJECT_POLYLINE);
       }
     }
+
   });
 
   onSliderChange(); // Triggers recompute
