@@ -21,6 +21,8 @@ console.log('Loaded rhino3dm.')
 let threeScene, threeCamera, threeRenderer
 let map
 let meshb64Mesh, meshoutMesh
+let draw;
+
 
 init()
 
@@ -200,13 +202,34 @@ function init() {
   // Initialize MapboxDraw
   const draw = new MapboxDraw({
     displayControlsDefault: false,
-    controls: {
-      polygon: true,
-      trash: true
-    },
-    defaultMode: 'draw_polygon'
+    defaultMode: 'simple_select'
   });
-  map.addControl(draw, 'top-right');
+  map.addControl(draw);
+
+  document.getElementById('btn-envelope-polygon').addEventListener('click', () => {
+    draw.changeMode('draw_polygon');
+  });
+
+  document.getElementById('btn-envelope-delete').addEventListener('click', () => {
+    if (EnvelopePolygonId && draw) {
+      // Remove from map
+      draw.delete(EnvelopePolygonId);
+      EnvelopePolygonId = null;
+
+      // Clear visual markers
+      clearEnvelopeLabels();
+
+      // Clear related input fields in the UI
+      document.getElementById('envelope_vertices').value = '';
+
+      PROJECT_POLYLINE = ""
+      saveSiteEvnelope('');
+      
+      console.warn('[Form IO] Envelope polygon deleted via custom button and UI cleared');
+    }
+  });
+
+
 
   map.on('load', () => {
     // Site layer and polygon
@@ -530,10 +553,23 @@ function handleSiteEvnelope(geometry) {
 function saveSiteEvnelope(SiteEvnelope) {
   if (!PROJECT_ID) return;
 
-  const payload = {
-    inputs: getInputs(),
-    site_envelope: SiteEvnelope
-  };
+  let payload;
+
+  if (!SiteEvnelope) {
+    // Send blank values for both site_envelope and envelope inputs
+    payload = {
+      inputs: {
+        envelope_origin: '',
+        envelope_vertices: ''
+      },
+      site_envelope: ''  // blank string instead of null
+    };
+  } else {
+    payload = {
+      inputs: getInputs(),
+      site_envelope: SiteEvnelope
+    };
+  }
 
   fetch(`/api/projects/${PROJECT_ID}/save/`, {
     method: 'POST',
@@ -544,11 +580,13 @@ function saveSiteEvnelope(SiteEvnelope) {
     body: JSON.stringify(payload)
   }).then(res => {
     if (!res.ok) throw new Error('Save failed');
-    console.log('[Form IO]Updated succesfully');
+    console.log('[Form IO] Envelope updated successfully');
   }).catch(err => {
-    console.error('[Form IO] Failed to save rectangle:', err);
+    console.error('[Form IO] Failed to save envelope:', err);
   });
 }
+
+
 
 function getPaddedBounds(bounds, paddingDegrees = 0.001) {
   const sw = bounds.getSouthWest();
@@ -1085,3 +1123,4 @@ function formatSiteBoundaryWithTurfDistances(siteGeoJSON) {
 
   return result;
 }
+

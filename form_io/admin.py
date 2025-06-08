@@ -13,7 +13,7 @@ class ProjectAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {
-            'fields': ('name', 'type', 'relative_location', "building_path" , 'site_geometry', 'inputs', 'thumbnail')
+            'fields': ('name', 'type', 'relative_location', "site_bounds" , 'site_envelope', 'inputs', 'thumbnail')
         }),
         ('Metadata', {
             'fields': ('created_at',),
