@@ -18,8 +18,9 @@
             const PROJECT_INPUTS = {{ project_inputs|safe }};
             const DJ_SITE_BOUNDS = {{ DJ_SITE_BOUNDS|safe }};
             let DJ_SITE_ENVELOPE = {{ DJ_SITE_ENVELOPE|safe }};
-        </script>
- -->
+            let DJ_BLOCKS_ENVELOPE = {{ DJ_BLOCKS_ENVELOPE|safe }};
+       </script>
+
     </head>
     <body>
         <!-- PROJECT CONTAINER -->
@@ -66,7 +67,7 @@
         <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
         <!-- TOOLBAR CONTAINER -->
-        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14w] max-w-[14vw] max-h-[80vh] overflow-y-auto space-y-2">
+        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] max-h-[80vh] overflow-y-auto space-y-2">
         
         <!-- SITE ENVELOPE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
@@ -122,8 +123,8 @@
                 <button id="btn-bldg-polyline" class="btn btn-neutral btn-outline btn-sm" title="Draw Polyline">
                 <iconify-icon icon="gis:polyline-pt"></iconify-icon>
                 </button>
-                <button id="btn-bldg-polyline" class="btn btn-neutral btn-outline btn-sm" title="Draw Polygon">
-                <iconify-icon icon="ph:polygon"></iconify-icon>
+                <button id="btn-bldg-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Rectangle">
+                <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
                 </button>
                 <button id="btn-bldg-delete" class="btn btn-error btn-outline btn-sm" title="Delete Building">
                 <iconify-icon icon="material-symbols-light:delete-outline-rounded"></iconify-icon>
@@ -233,10 +234,9 @@
         <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
         <ul class="steps">
             <li class="step step-neutral font-sans ">Massing</li>
-            <li class="step step-neutral font-sans">Unit Mix</li>
-            <li class="step step-neutral font-sans ">Basement</li>
+            <li class="step font-sans">Unit Mix</li>
+            <li class="step font-sans ">Floorplans</li>
             <li class="step font-sans ">Facade</li>
-            <li class="step font-sans ">Final Scheme</li>
             <li class="step font-sans ">Documentation</li>
             <li class="step font-sans ">Export</li>
 

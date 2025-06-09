@@ -23,6 +23,7 @@ let map
 let meshb64Mesh, meshoutMesh
 let draw
 let isEnvelopeSelectable = false;
+let isBlockSelectable = false;
 let currentDrawRole = null; // "site", "Envelope", "block", etc.
 
 
@@ -204,11 +205,18 @@ function init() {
     maxBounds: paddedBounds
   });
 
-  // Initialize MapboxDraw
-  draw = new MapboxDraw({
-    displayControlsDefault: false
+    // Extend the default modes with the rectangle drawing mode
+  const modes = MapboxDraw.modes;
+  modes.draw_rectangle_drag = mapboxGLDrawRectangleDrag;
+  // Initialize the drawing control with the extended modes
+  const draw = new MapboxDraw({
+    displayControlsDefault: false,
+    modes: modes
   });
+
+  // Add the drawing control to the map
   map.addControl(draw);
+
 
 
 document.getElementById('btn-envelope-polygon').addEventListener('click', () => {
@@ -259,9 +267,86 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
   });
 
 
+  // Toggle block selection mode
+document.getElementById('btn-bldg-select').addEventListener('click', () => {
+  const button = document.getElementById('btn-bldg-select');
+  isBlockSelectable = !isBlockSelectable;
+
+  if (isBlockSelectable) {
+    button.classList.add('btn-active');
+    currentDrawRole = 'block';
+    draw.changeMode('simple_select');
+    showToast('block-select-toast', 'Block edit mode "On"', 'neutral');
+    console.log('[Form IO] Block edit mode ON');
+  } else {
+    button.classList.remove('btn-active');
+    currentDrawRole = null;
+    draw.changeMode('simple_select', { featureIds: [] });
+    removeToast('block-select-toast');
+    console.log('[Form IO] Block edit mode OFF');
+  }
+});
+
+
+// Draw block as LineString
+document.getElementById('btn-bldg-line').addEventListener('click', () => {
+  currentDrawRole = 'block';
+  draw.changeMode('draw_line_string');
+  console.log('[Form IO] Drawing mode: block line (2-point limit)');
+
+  const handler = (e) => {
+    const features = draw.getAll().features;
+    const current = features[features.length - 1];
+
+    if (current?.geometry?.type === 'LineString' && current.geometry.coordinates.length === 2) {
+      draw.changeMode('simple_select', { featureIds: [current.id] });
+      console.log('[Form IO] Line completed after 2 points');
+      map.off('draw.update', handler); // Remove this temp handler
+    }
+  };
+
+  map.on('draw.update', handler);
+});
+
+
+// Draw block as Polyline (LineString again)
+document.getElementById('btn-bldg-polyline').addEventListener('click', () => {
+  currentDrawRole = 'block';
+  draw.changeMode('draw_line_string');
+  console.log('[Form IO] Drawing mode: block polyline');
+});
+
+// Draw block as Polygon
+document.getElementById('btn-bldg-polygon').addEventListener('click', () => {
+  currentDrawRole = 'block';
+  draw.changeMode('draw_polygon');
+  console.log('[Form IO] Drawing mode: Envelope');
+});
+
+
+
+// Delete block features (basic version)
+document.getElementById('btn-bldg-delete').addEventListener('click', () => {
+  const selected = draw.getSelectedIds();
+  if (selected.length > 0) {
+    draw.delete(selected);
+    console.warn('[Form IO] Block geometry deleted');
+  } else {
+    showToast('delete-block-failed', 'No block selected for deletion', 'warning', 2000);
+  }
+});
+
 
 
   map.on('load', () => {
+
+    if (draw && DJ_BLOCKS_ENVELOPE && Array.isArray(DJ_BLOCKS_ENVELOPE)) {
+      drawBlocksFromBackend();
+    } else {
+      console.warn('[Form IO] draw or DJ_BLOCKS_ENVELOPE not ready');
+    }
+
+
     // Site layer and polygon
     if (DJ_SITE_BOUNDS?.features?.length) {
       const siteFeature = DJ_SITE_BOUNDS.features[0];
@@ -337,58 +422,114 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
 
     map.fitBounds(siteBounds.bounds, { padding: 0, duration: 0 });
     map.addLayer(customLayer);
+
   });
 
-  map.on('click', (e) => {
-    if (!isEnvelopeSelectable) {
-      draw.changeMode('simple_select');
-      draw.changeMode('simple_select', { featureIds: [] });
- // Ensure selection is cleared
-    }
-  });
+map.on('click', (e) => {
+  // If neither editing mode is active, prevent lingering selections
+  if (!isEnvelopeSelectable && !isBlockSelectable) {
+    draw.changeMode('simple_select', { featureIds: [] });
+    console.log('[Form IO] Selection cleared on click (no active edit mode)');
+  }
+});
+
 
 // Create handler
 map.on('draw.create', function (e) {
   const feature = e.features[0];
-  if (!feature || feature.geometry.type !== 'Polygon') return;
+  if (!feature || !['Polygon', 'LineString'].includes(feature.geometry.type)) return;
 
-  // Assign the role based on active intent
   if (!feature.properties) feature.properties = {};
-  feature.properties.role = currentDrawRole || 'undefined';
+  if (!feature.properties.role) {
+    feature.properties.role = currentDrawRole || 'undefined';
+  }
 
   const featureId = feature.id;
 
-  if (currentDrawRole === 'site') {
-    sitePolygonId = featureId;
-  } else if (currentDrawRole === 'Envelope') {
-    EnvelopePolygonId = featureId;
-    updateEnvelopeSource(feature.geometry);
+  switch (currentDrawRole) {
+    case 'Envelope':
+      EnvelopePolygonId = featureId;
+      updateEnvelopeSource(feature.geometry);
+      handlePolygonGeometry(feature.geometry, 'Envelope');
+      showPolygonDimensions(feature.geometry, 'Envelope');
+      break;
+    case 'site':
+      sitePolygonId = featureId;
+      handlePolygonGeometry(feature.geometry, 'site');
+      showPolygonDimensions(feature.geometry, 'site');
+      break;
+      case 'block':
+        console.log('[Form IO] Block geometry created:', feature);
+
+        // Ensure role is explicitly set before saving
+        if (!feature.properties) feature.properties = {};
+        feature.properties.role = 'block';
+
+        draw.setFeatureProperty(feature.id, 'role', 'block');
+
+        // Collect all blocks again now that current one is properly updated
+        const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+
+        const blockFeatures = allBlocks.map(f => ({
+          type: "Feature",
+          geometry: f.geometry,
+          properties: f.properties || {}
+        }));
+
+        console.log('[Form IO] Saving block geometries:', blockFeatures);
+
+        saveBlocksToProject(blockFeatures);
+
+        // Re-arm draw mode
+        setTimeout(() => {
+          draw.changeMode(feature.geometry.type === 'Polygon' ? 'draw_polygon' : 'draw_line_string');
+          console.log('[Form IO] Re-armed draw mode for another block');
+        }, 100);
+        break;
+
+
   }
 
-  if (['site', 'Envelope'].includes(currentDrawRole)) {
-    handlePolygonGeometry(feature.geometry, currentDrawRole);
-    showPolygonDimensions(feature.geometry, currentDrawRole);
-  }
-
-  // Reset the mode after one draw (optional, prevents accidental reuse)
   currentDrawRole = null;
 });
+
+
 
 
 // Update handler
 map.on('draw.update', function (e) {
   const feature = e.features[0];
   const role = feature.properties?.role;
+  const geometryType = feature.geometry?.type;
 
-  if (!feature || feature.geometry.type !== 'Polygon' || !role) return;
+  if (!feature || !geometryType || !role) return;
 
-  if (role === 'Envelope') {
+  // Handle envelope polygon updates
+  if (role === 'Envelope' && geometryType === 'Polygon') {
     updateEnvelopeSource(feature.geometry);
+    handlePolygonGeometry(feature.geometry, role);
+    showPolygonDimensions(feature.geometry, role);
   }
 
-  handlePolygonGeometry(feature.geometry, role);
-  showPolygonDimensions(feature.geometry, role);
+  // Handle site polygon updates
+  else if (role === 'site' && geometryType === 'Polygon') {
+    handlePolygonGeometry(feature.geometry, role);
+    showPolygonDimensions(feature.geometry, role);
+  }
+
+  // Handle block updates (Polygon or LineString)
+  else if (role === 'block' && ['Polygon', 'LineString'].includes(geometryType)) {
+    // Optional: persist block or style differently
+    console.log('[Form IO] Block geometry updated:', feature);
+    // Optionally call showPolygonDimensions only for polygon blocks
+    if (geometryType === 'Polygon') {
+      showPolygonDimensions(feature.geometry, role);
+    }
+  } else {
+    console.warn('[Form IO] Unhandled update:', role, geometryType);
+  }
 });
+
 
 // Delete handler
 map.on('draw.delete', function (e) {
@@ -404,6 +545,16 @@ map.on('draw.delete', function (e) {
       clearMapLabels('Envelope');
       console.warn('[Form IO] site_envelope deleted');
     }
+    if (role === 'block') {
+      const remainingBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+      const features = remainingBlocks.map(f => ({
+        type: "Feature",
+        geometry: f.geometry,
+        properties: f.properties || {}
+      }));
+      saveBlocksToProject(features); // ✅ correctly sends full Feature objects
+    }
+
   });
 });
 
@@ -428,21 +579,60 @@ map.on('draw.delete', function (e) {
 map.on('draw.selectionchange', (e) => {
   const selected = e.features?.[0];
 
-  if (!isEnvelopeSelectable || !selected || selected.properties?.role !== 'Envelope') {
-    draw.changeMode('simple_select', { featureIds: [] });
-    console.log('[Form IO] Selection blocked or invalid role');
+  if (!selected || !selected.id) {
+    console.warn('[Form IO] Selection change triggered but no valid feature was selected.');
     return;
   }
 
-  const featureId = selected.id;
-  console.log('[Form IO] Envelope polygon selected:', featureId);
+  // Ensure properties object exists
+  if (!selected.properties) {
+    selected.properties = {};
+  }
 
-  // Small delay to ensure correct selection state
-  setTimeout(() => {
-    draw.changeMode('direct_select', { featureId });
-    console.log('[Form IO] Switched to direct_select for Envelope');
-  }, 0); // next event loop
+  // Assign role if missing and currentDrawRole is active
+  if (!selected.properties.role && currentDrawRole) {
+    selected.properties.role = currentDrawRole;
+    draw.setFeatureProperty(selected.id, 'role', currentDrawRole);
+  }
+
+  // Envelope selection logic
+  if (selected.properties.role === 'Envelope') {
+    if (!isEnvelopeSelectable) {
+      draw.changeMode('simple_select', { featureIds: [] });
+      console.log('[Form IO] Envelope selection blocked');
+      return;
+    }
+
+    const featureId = selected.id;
+    setTimeout(() => {
+      draw.changeMode('direct_select', { featureId });
+      console.log('[Form IO] Switched to direct_select for Envelope');
+    }, 0);
+    return;
+  }
+
+  // Block selection logic
+  if (selected.properties.role === 'block') {
+    if (!isBlockSelectable) {
+      draw.changeMode('simple_select', { featureIds: [] });
+      console.log('[Form IO] Block selection blocked');
+      return;
+    }
+
+    const featureId = selected.id;
+    setTimeout(() => {
+      draw.changeMode('direct_select', { featureId });
+      console.log(`[Form IO] Block selected with ID: ${featureId}`);
+    }, 0);
+    return;
+  }
+
+  // Default case — unknown or unhandled role
+  draw.changeMode('simple_select', { featureIds: [] });
+  console.log('[Form IO] Selection cleared — invalid or unsupported role');
 });
+
+
 
 
 
@@ -944,9 +1134,11 @@ function populateInputsUI(inputs) {
 document.addEventListener('DOMContentLoaded', async () => {
   preloadInputs(PROJECT_INPUTS);  // okay if these exist
   registerInputListeners();       // not harmful, but won't bind to anything yet
+  
+  drawBlocksFromBackend();
 
   // ✅ Load GH UI and compute when ready
-  await fetchGrasshopperInputs(data.definition); 
+  await fetchGrasshopperInputs(data.definition);
 });
 
 let labelMarkers = [];
@@ -1146,6 +1338,34 @@ async function refreshProjectPolyline() {
   }
 }
 
+async function refreshProjectBlocksAndEnvelope() {
+  try {
+    const res = await fetch(`/api/projects/${PROJECT_ID}/get_polyline/`);
+    if (!res.ok) throw new Error('Fetch failed');
+    const json = await res.json();
+
+    DJ_SITE_ENVELOPE = json.DJ_SITE_ENVELOPE;
+    DJ_BLOCKS_ENVELOPE = json.DJ_BLOCKS_ENVELOPE || [];
+    console.log('[Form IO] DJ_SITE_ENVELOPE and DJ_BLOCKS_ENVELOPE refreshed from backend');
+    // Optional: redraw blocks on map
+    if (Array.isArray(DJ_BLOCKS_ENVELOPE)) {
+      clearBlocksFromMap();
+      DJ_BLOCKS_ENVELOPE.forEach(geometry => {
+        draw.add({
+          type: "Feature",
+          geometry: geometry,
+          properties: { role: "block" }
+        });
+      });
+
+    }
+
+    console.log('[Form IO] Blocks and Envelope refreshed from backend');
+  } catch (e) {
+    console.error('Failed to refresh polyline or blocks:', e);
+  }
+}
+
 
 async function handlePolygonGeometry(geometry, role) {
   const coords = geometry.coordinates[0];
@@ -1172,7 +1392,7 @@ async function handlePolygonGeometry(geometry, role) {
 
   if (role === 'Envelope') {
     await saveSiteEvnelope(relativePath);        // persist
-    await refreshProjectPolyline();              // DJ_SITE_ENVELOPE now available
+    await refreshProjectBlocksAndEnvelope();              // DJ_SITE_ENVELOPE now available
 
     // ✅ Only now use it
     if (!DJ_SITE_ENVELOPE || !Array.isArray(DJ_SITE_ENVELOPE.points)) {
@@ -1234,4 +1454,59 @@ function showPolygonDimensions(geometry, role) {
   } else {
     EnvelopeLabelMarkers = labelMarkers;
   }
+}
+
+async function saveBlocksToProject(blockFeatures) {
+  if (!PROJECT_ID) return;
+  console.log('[Form IO] logging blockFeatures:', blockFeatures);
+
+  try {
+    await fetch(`/api/projects/${PROJECT_ID}/save/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCSRFToken()
+      },
+      body: JSON.stringify({ blocks_envelope: blockFeatures }) // ❌ Error: blockFeatures is not defined
+    });
+
+    console.log('[Form IO] Blocks saved successfully to project');
+  } catch (err) {
+    console.error('[Form IO] Failed to save blocks:', err);
+  }
+}
+
+function clearBlocksFromMap() {
+  if (!draw) {
+    console.warn('[Form IO] draw is not initialized yet. Skipping clearBlocksFromMap().');
+    return;
+  }
+
+  const blockIds = draw.getAll().features
+    .filter(f => f.properties?.role === 'block')
+    .map(f => f.id);
+
+  if (blockIds.length) {
+    draw.delete(blockIds);
+  }
+}
+
+
+function drawBlocksFromBackend() {
+  if (!draw || !Array.isArray(DJ_BLOCKS_ENVELOPE)) {
+    console.warn('[Form IO] draw or DJ_BLOCKS_ENVELOPE not ready');
+    return;
+  }
+
+  clearBlocksFromMap();
+
+  DJ_BLOCKS_ENVELOPE.forEach(feature => {
+    draw.add({
+      type: "Feature",
+      geometry: feature.geometry,
+      properties: feature.properties || { role: "block" }
+    });
+  });
+
+  console.log('[Form IO] Re-rendered blocks from DJ_BLOCKS_ENVELOPE context');
 }

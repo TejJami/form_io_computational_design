@@ -277,6 +277,8 @@ def project_detail(request, project_id):
         "DJ_SITE_BOUNDS": json.dumps(project.site_bounds),
         "DJ_SITE_ENVELOPE": json.dumps(project.site_envelope),
         "mapbox_token": mapbox_token,
+        "DJ_BLOCKS_ENVELOPE": json.dumps(project.blocks_envelope),
+
     })
 
 @csrf_exempt
@@ -316,6 +318,8 @@ def save_project_inputs(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     try:
         data = json.loads(request.body)
+        print(f"Received data for project {project_id}: {data}")
+
 
         # Save site_envelope if present
         if "site_envelope" in data:
@@ -329,6 +333,11 @@ def save_project_inputs(request, project_id):
         if "inputs" in data:
             project.inputs = data["inputs"]
 
+        # Save blocks if present
+        if "blocks_envelope" in data:
+            project.blocks_envelope = data["blocks_envelope"]
+
+
         project.save()
         return JsonResponse({"success": True})
     except Exception as e:
@@ -340,7 +349,8 @@ def get_project_polyline(request, project_id):
     try:
         project = Project.objects.get(pk=project_id)
         return JsonResponse({
-            "DJ_SITE_ENVELOPE": project.site_envelope  # match frontend expectation
+            "DJ_SITE_ENVELOPE": project.site_envelope,
+            "DJ_BLOCKS_ENVELOPE": project.blocks_envelope
         })
     except Project.DoesNotExist:
         return HttpResponseBadRequest("Invalid project ID")
