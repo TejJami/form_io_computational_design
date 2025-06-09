@@ -23,6 +23,7 @@ let map
 let meshb64Mesh, meshoutMesh
 let draw
 let isEnvelopeSelectable = false;
+let currentDrawRole = null; // "site", "Envelope", "block", etc.
 
 
 init()
@@ -211,9 +212,9 @@ function init() {
 
 
 document.getElementById('btn-envelope-polygon').addEventListener('click', () => {
-  // Safely enter draw_polygon mode
-  draw.changeMode('draw_polygon', { featureId: undefined });
-  console.log('[Form IO] Drawing mode: draw_polygon activated');
+  currentDrawRole = 'Envelope';
+  draw.changeMode('draw_polygon');
+  console.log('[Form IO] Drawing mode: Envelope');
 });
 
 
@@ -240,8 +241,8 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
   });
 
 
-  document.getElementById('btn-bldg-select').addEventListener('click', () => {
-    const button = document.getElementById('btn-bldg-select');
+  document.getElementById('btn-envelope-select').addEventListener('click', () => {
+    const button = document.getElementById('btn-envelope-select');
     isEnvelopeSelectable = !isEnvelopeSelectable;
 
     if (isEnvelopeSelectable) {
@@ -351,21 +352,28 @@ map.on('draw.create', function (e) {
   const feature = e.features[0];
   if (!feature || feature.geometry.type !== 'Polygon') return;
 
-  const role = feature.properties?.role || null;
+  // Assign the role based on active intent
+  if (!feature.properties) feature.properties = {};
+  feature.properties.role = currentDrawRole || 'undefined';
+
   const featureId = feature.id;
 
-  if (role === 'site') {
+  if (currentDrawRole === 'site') {
     sitePolygonId = featureId;
-  } else if (role === 'Envelope') {
+  } else if (currentDrawRole === 'Envelope') {
     EnvelopePolygonId = featureId;
     updateEnvelopeSource(feature.geometry);
   }
 
-  if (role === 'site' || role === 'Envelope') {
-    handlePolygonGeometry(feature.geometry, role);
-    showPolygonDimensions(feature.geometry, role);
+  if (['site', 'Envelope'].includes(currentDrawRole)) {
+    handlePolygonGeometry(feature.geometry, currentDrawRole);
+    showPolygonDimensions(feature.geometry, currentDrawRole);
   }
+
+  // Reset the mode after one draw (optional, prevents accidental reuse)
+  currentDrawRole = null;
 });
+
 
 // Update handler
 map.on('draw.update', function (e) {
@@ -421,18 +429,19 @@ map.on('draw.selectionchange', (e) => {
   const selected = e.features?.[0];
 
   if (!isEnvelopeSelectable || !selected || selected.properties?.role !== 'Envelope') {
-    draw.changeMode('simple_select', { featureIds: [] }); // Clear selection
+    draw.changeMode('simple_select', { featureIds: [] });
     console.log('[Form IO] Selection blocked or invalid role');
     return;
   }
 
   const featureId = selected.id;
-
   console.log('[Form IO] Envelope polygon selected:', featureId);
 
-  // ✅ Switch to direct_select to allow editing immediately
-  draw.changeMode('direct_select', { featureId });
-
+  // Small delay to ensure correct selection state
+  setTimeout(() => {
+    draw.changeMode('direct_select', { featureId });
+    console.log('[Form IO] Switched to direct_select for Envelope');
+  }, 0); // next event loop
 });
 
 
