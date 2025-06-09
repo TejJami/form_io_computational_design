@@ -340,11 +340,6 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
 
   map.on('load', () => {
 
-    if (draw && DJ_BLOCKS_ENVELOPE && Array.isArray(DJ_BLOCKS_ENVELOPE)) {
-      drawBlocksFromBackend();
-    } else {
-      console.warn('[Form IO] draw or DJ_BLOCKS_ENVELOPE not ready');
-    }
 
 
     // Site layer and polygon
@@ -397,6 +392,19 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
       showSiteEvnelopeDimensions(EnvelopeFeature.geometry);
     }
 
+      if (draw && DJ_BLOCKS_ENVELOPE && Array.isArray(DJ_BLOCKS_ENVELOPE)) {
+      DJ_BLOCKS_ENVELOPE.forEach(feature => {
+    draw.add({
+      type: "Feature",
+      geometry: feature.geometry,
+      properties: feature.properties || { role: "block" }
+    });
+  });
+  } else {
+    console.warn('[Form IO] draw not ready');
+  }
+
+  
     // 3D Envelopes
     map.addLayer({
       id: '3d-buildings',
@@ -1134,8 +1142,6 @@ function populateInputsUI(inputs) {
 document.addEventListener('DOMContentLoaded', async () => {
   preloadInputs(PROJECT_INPUTS);  // okay if these exist
   registerInputListeners();       // not harmful, but won't bind to anything yet
-  
-  drawBlocksFromBackend();
 
   // ✅ Load GH UI and compute when ready
   await fetchGrasshopperInputs(data.definition);
@@ -1493,20 +1499,12 @@ function clearBlocksFromMap() {
 
 
 function drawBlocksFromBackend() {
-  if (!draw || !Array.isArray(DJ_BLOCKS_ENVELOPE)) {
-    console.warn('[Form IO] draw or DJ_BLOCKS_ENVELOPE not ready');
-    return;
-  }
+  console.log('[Form IO] drawBlocksFromBackend called', DJ_BLOCKS_ENVELOPE);
 
-  clearBlocksFromMap();
 
-  DJ_BLOCKS_ENVELOPE.forEach(feature => {
-    draw.add({
-      type: "Feature",
-      geometry: feature.geometry,
-      properties: feature.properties || { role: "block" }
-    });
-  });
+
+
+
 
   console.log('[Form IO] Re-rendered blocks from DJ_BLOCKS_ENVELOPE context');
 }
