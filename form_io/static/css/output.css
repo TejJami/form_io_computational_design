@@ -1736,6 +1736,10 @@ video {
   cursor: not-allowed;
 }
 
+.textarea-xs {
+  font-size: 0.6875rem;
+}
+
 .textarea-sm {
   font-size: 0.75rem;
 }
@@ -1771,6 +1775,11 @@ video {
   margin-inline-start: calc(0.25rem * 3);
   margin-inline-end: calc(0.25rem * -3);
   border-inline-start: var(--border) solid color-mix(in oklab, currentColor 10%, #0000);
+}
+
+.floating-label:has(.input-xs, .select-xs, .textarea-xs) span {
+  font-size: 0.6875rem;
+  top: calc(var(--size-field, 0.25rem) * 6 / 2);
 }
 
 .floating-label:has(.input-sm, .select-sm, .textarea-sm) span {
@@ -2537,14 +2546,6 @@ video {
 .steps .step-error + .step-error:before, .steps .step-error:after, .steps .step-error > .step-icon {
   --step-bg: var(--color-error);
   --step-fg: var(--color-error-content);
-}
-
-.steps-horizontal {
-  grid-auto-columns: 1fr;
-  display: inline-grid;
-  grid-auto-flow: column;
-  overflow: hidden;
-  overflow-x: auto;
 }
 
 .steps-horizontal .step {
@@ -3392,6 +3393,10 @@ video {
   position: sticky;
 }
 
+.bottom-1 {
+  bottom: 0.25rem;
+}
+
 .bottom-3 {
   bottom: 0.75rem;
 }
@@ -3402,6 +3407,10 @@ video {
 
 .right-0 {
   right: 0px;
+}
+
+.right-1 {
+  right: 0.25rem;
 }
 
 .right-4 {
@@ -3424,6 +3433,18 @@ video {
   bottom: 1rem;
 }
 
+.bottom-2 {
+  bottom: 0.5rem;
+}
+
+.right-2 {
+  right: 0.5rem;
+}
+
+.bottom-0 {
+  bottom: 0px;
+}
+
 .z-50 {
   z-index: 50;
 }
@@ -3434,10 +3455,6 @@ video {
 
 .m-0 {
   margin: 0px;
-}
-
-.m-4 {
-  margin: 1rem;
 }
 
 .mx-auto {
@@ -3455,10 +3472,6 @@ video {
 
 .mt-1 {
   margin-top: 0.25rem;
-}
-
-.mt-2 {
-  margin-top: 0.5rem;
 }
 
 .mt-4 {
@@ -3513,20 +3526,24 @@ video {
   height: 100%;
 }
 
-.max-h-\[70vh\] {
-  max-height: 70vh;
+.max-h-\[300px\] {
+  max-height: 300px;
 }
 
 .max-h-\[80vh\] {
   max-height: 80vh;
 }
 
-.max-h-\[300px\] {
-  max-height: 300px;
+.max-h-\[30vh\] {
+  max-height: 30vh;
 }
 
-.max-h-\[400px\] {
-  max-height: 400px;
+.max-h-\[100px\] {
+  max-height: 100px;
+}
+
+.max-h-\[20vh\] {
+  max-height: 20vh;
 }
 
 .min-h-\[120px\] {
@@ -3553,8 +3570,8 @@ video {
   width: 66.666667%;
 }
 
-.w-\[14vw\] {
-  width: 14vw;
+.w-\[14w\] {
+  width: 14w;
 }
 
 .w-\[80vw\] {
@@ -3565,20 +3582,12 @@ video {
   width: 100%;
 }
 
-.w-\[16vw\] {
-  width: 16vw;
+.w-\[14vw\] {
+  width: 14vw;
 }
 
-.w-\[15vw\] {
-  width: 15vw;
-}
-
-.w-\[154w\] {
-  width: 154w;
-}
-
-.w-80 {
-  width: 20rem;
+.w-\[18vw\] {
+  width: 18vw;
 }
 
 .max-w-6xl {
@@ -3593,12 +3602,8 @@ video {
   max-width: 1280px;
 }
 
-.max-w-\[16vw\] {
-  max-width: 16vw;
-}
-
-.max-w-\[15vw\] {
-  max-width: 15vw;
+.max-w-\[18vw\] {
+  max-width: 18vw;
 }
 
 .shrink-0 {
@@ -3660,10 +3665,6 @@ video {
   align-content: flex-start;
 }
 
-.items-start {
-  align-items: flex-start;
-}
-
 .items-end {
   align-items: flex-end;
 }
@@ -3688,16 +3689,26 @@ video {
   gap: 1.5rem;
 }
 
-.space-y-2 > :not([hidden]) ~ :not([hidden]) {
-  --tw-space-y-reverse: 0;
-  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
-  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+.gap-1 {
+  gap: 0.25rem;
 }
 
 .space-x-2 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-x-reverse: 0;
   margin-right: calc(0.5rem * var(--tw-space-x-reverse));
   margin-left: calc(0.5rem * calc(1 - var(--tw-space-x-reverse)));
+}
+
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
 
 .overflow-hidden {
@@ -3789,12 +3800,12 @@ video {
   padding: 0.5rem;
 }
 
-.p-6 {
-  padding: 1.5rem;
-}
-
 .p-4 {
   padding: 1rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
 }
 
 .px-4 {
@@ -3825,6 +3836,10 @@ video {
   padding-bottom: 1.5rem;
 }
 
+.pr-2 {
+  padding-right: 0.5rem;
+}
+
 .pt-2 {
   padding-top: 0.5rem;
 }
@@ -3837,8 +3852,8 @@ video {
   padding-top: 1.5rem;
 }
 
-.pr-2 {
-  padding-right: 0.5rem;
+.pr-1 {
+  padding-right: 0.25rem;
 }
 
 .text-left {
@@ -3900,10 +3915,6 @@ video {
 
 .leading-tight {
   line-height: 1.25;
-}
-
-.leading-snug {
-  line-height: 1.375;
 }
 
 .tracking-wide {

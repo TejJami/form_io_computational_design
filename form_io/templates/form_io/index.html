@@ -66,7 +66,7 @@
         <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
         <!-- TOOLBAR CONTAINER -->
-        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[154w] max-w-[14vw] max-h-[80vh] overflow-y-auto space-y-2">
+        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14w] max-w-[14vw] max-h-[80vh] overflow-y-auto space-y-2">
         
         <!-- SITE ENVELOPE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
@@ -242,21 +242,24 @@
 
 
 
-        <!-- Chat Box using DaisyUI -->
-        <div id="chat-box" class="fixed bottom-4 right-4 w-80 max-h-[400px] bg-base-100 shadow-xl rounded-xl p-4 z-50 flex flex-col justify-end space-y-2 border border-base-300">
+        <!-- Chat Box using DaisyUI (Compact Version) -->
+        <div id="chat-box" class="fixed bottom-1 right-1 w-[18vw] max-w-[18vw] max-h-[20vh] bg-base-100 shadow-md rounded-lg p-2 z-50 flex flex-col justify-end space-y-1 border border-base-300">
 
             <!-- Chat Messages Scroll Area -->
-            <div id="chat-messages" class="overflow-y-auto pr-2 flex-grow max-h-[300px] space-y-2">
+            <div id="chat-messages" class="overflow-y-auto pr-1 flex-grow max-h-[100px] space-y-1 text-sm">
                 <!-- Dynamically appended messages will appear here -->
             </div>
 
             <!-- Input + Send Area -->
-            <div class="chat-input flex gap-2 items-end">
-                <textarea id="chatbox" placeholder="Type your prompt here..." class="textarea textarea-bordered textarea-sm resize-none w-full" rows="2"></textarea>
-                <button id="send_prompt" class="btn btn-primary btn-sm shrink-0">Send</button>
+            <div class="chat-input flex gap-1 items-end">
+                <textarea id="chatbox" placeholder="Type your prompt here..." class="textarea textarea-bordered textarea-xs resize-none w-full leading-tight" rows="1"></textarea>
+                <button id="send_prompt" class="btn btn-neutral btn-outline btn-xs shrink-0">
+                    <iconify-icon icon="mdi:send"></iconify-icon>
+                </button>
             </div>
 
         </div>
+
 
 
     </body>
