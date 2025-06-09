@@ -346,57 +346,59 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
     }
   });
 
-  // Create handler
-  map.on('draw.create', function (e) {
-    const feature = e.features[0];
-    if (!feature || feature.geometry.type !== 'Polygon') return;
+// Create handler
+map.on('draw.create', function (e) {
+  const feature = e.features[0];
+  if (!feature || feature.geometry.type !== 'Polygon') return;
 
-    const role = feature.properties?.role || null;
+  const role = feature.properties?.role || null;
+  const featureId = feature.id;
 
-    if (role === 'site') {
-      sitePolygonId = feature.id;
+  if (role === 'site') {
+    sitePolygonId = featureId;
+  } else if (role === 'Envelope') {
+    EnvelopePolygonId = featureId;
+    updateEnvelopeSource(feature.geometry);
+  }
 
+  if (role === 'site' || role === 'Envelope') {
+    handlePolygonGeometry(feature.geometry, role);
+    showPolygonDimensions(feature.geometry, role);
+  }
+});
 
-    }  else if (role === 'Envelope') {
-      handleSiteEvnelope(feature.geometry);
-      updateEnvelopeSource(feature.geometry);
-      clearEnvelopeLabels();
-      showSiteEvnelopeDimensions(feature.geometry);
+// Update handler
+map.on('draw.update', function (e) {
+  const feature = e.features[0];
+  const role = feature.properties?.role;
 
+  if (!feature || feature.geometry.type !== 'Polygon' || !role) return;
+
+  if (role === 'Envelope') {
+    updateEnvelopeSource(feature.geometry);
+  }
+
+  handlePolygonGeometry(feature.geometry, role);
+  showPolygonDimensions(feature.geometry, role);
+});
+
+// Delete handler
+map.on('draw.delete', function (e) {
+  e.features.forEach(f => {
+    const role = f.properties?.role;
+
+    if (f.id === sitePolygonId && role === 'site') {
+      sitePolygonId = null;
+      clearMapLabels('site');
+      console.warn('[Form IO] Site Bounds deleted');
+    } else if (f.id === EnvelopePolygonId && role === 'Envelope') {
+      EnvelopePolygonId = null;
+      clearMapLabels('Envelope');
+      console.warn('[Form IO] site_envelope deleted');
     }
   });
+});
 
-  // Update handler
-  map.on('draw.update', function (e) {
-    const feature = e.features[0];
-    const role = feature.properties?.role;
-
-    if (role === 'site') {
-      saveSiteGeometry(feature.geometry);
-      clearSiteLabels();
-      showSiteBoundaryDimensions(feature);
-    } else if (role === 'Envelope') {
-      handleSiteEvnelope(feature.geometry);
-      updateEnvelopeSource(feature.geometry);
-      clearEnvelopeLabels();
-      showSiteEvnelopeDimensions(feature.geometry);
-    }
-  });
-
-  // Delete handler
-  map.on('draw.delete', function (e) {
-    e.features.forEach(f => {
-      if (f.id === sitePolygonId) {
-        sitePolygonId = null;
-        clearSiteLabels();
-        console.warn('[Form IO] Site Bounds deleted');
-      } else if (f.id === EnvelopePolygonId) {
-        EnvelopePolygonId = null;
-        clearEnvelopeLabels();
-        console.warn('[Form IO] site_envelope deleted');
-      }
-    });
-  });
 
   // Helper: update Envelope geojson source
   function updateEnvelopeSource(geometry) {
@@ -722,20 +724,6 @@ function updateInputs(parameters) {
       inputElement.value = parameters[key];
     }
 
-    // ✅ Rehydrate DJ_SITE_ENVELOPE if envelope_vertices is updated
-    if (key === 'envelope_vertices' && typeof parameters[key] === 'string') {
-      const points = parameters[key].split(';').map(s => {
-        const [x, y, z] = s.split(',').map(Number);
-        return { x, y, z };
-      });
-      if (points.length > 1) {
-        DJ_SITE_ENVELOPE = {
-          origin: { x: 0, y: 0, z: 0 },  // this is what was used during save
-          points: points
-        };
-        console.log('[Form IO] Reconstructed DJ_SITE_ENVELOPE from envelope_vertices input');
-      }
-    }
   });
 
   onSliderChange(); // Triggers recompute
@@ -1242,5 +1230,95 @@ async function refreshProjectPolyline() {
     console.log('[Form IO] DJ_SITE_ENVELOPE refreshed from backend');
   } catch (e) {
     console.error('Failed to refresh polyline:', e);
+  }
+}
+
+
+async function handlePolygonGeometry(geometry, role) {
+  const coords = geometry.coordinates[0];
+  const originLngLat = coords[0];
+
+  const origin = mapboxgl.MercatorCoordinate.fromLngLat({
+    lng: originLngLat[0],
+    lat: originLngLat[1]
+  });
+
+  const points = coords.map(([lng, lat]) => {
+    const point = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
+    return {
+      x: point.x - origin.x,
+      y: point.y - origin.y,
+      z: 0
+    };
+  });
+
+  const relativePath = {
+    origin: { x: origin.x, y: origin.y, z: 0 },
+    points: points
+  };
+
+  if (role === 'Envelope') {
+    await saveSiteEvnelope(relativePath);        // persist
+    await refreshProjectPolyline();              // DJ_SITE_ENVELOPE now available
+
+    // ✅ Only now use it
+    if (!DJ_SITE_ENVELOPE || !Array.isArray(DJ_SITE_ENVELOPE.points)) {
+      console.warn('[Form IO] DJ_SITE_ENVELOPE not ready after refresh');
+      return;
+    }
+
+    const formatted = formatSiteEvnelopeWithTurfDistances(DJ_SITE_ENVELOPE);
+    updateInputs({ envelope_vertices: formatted });
+    compute(); // trigger Rhino solve
+  } else if (role === 'site') {
+    saveSiteGeometry(geometry);
+  }
+}
+
+
+
+
+function clearMapLabels(role) {
+  const markerArray = role === 'site' ? siteLabelMarkers : EnvelopeLabelMarkers;
+  markerArray.forEach(m => m.remove());
+
+  if (role === 'site') {
+    siteLabelMarkers = [];
+  } else {
+    EnvelopeLabelMarkers = [];
+  }
+}
+
+function showPolygonDimensions(geometry, role) {
+  if (!geometry || geometry.type !== 'Polygon') return;
+
+  clearMapLabels(role);
+
+  const coords = geometry.coordinates[0];
+  const labelMarkers = [];
+
+  coords.slice(0, -1).forEach((p1, i) => {
+    const p2 = coords[i + 1];
+    const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
+    const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+
+    const el = document.createElement('div');
+    el.innerText = `${dist.toFixed(1)} m`;
+    styleLabel(el);
+
+    const marker = new mapboxgl.Marker(el).setLngLat(mid).addTo(map);
+    labelMarkers.push(marker);
+  });
+
+  const area = turf.area(geometry);
+  const areaText = area > 10000 ? `${(area / 10000).toFixed(2)} ha` : `${area.toFixed(1)} m²`;
+  const labelId = role === 'site' ? 'site-area-label' : 'Envelope-area-label';
+  const labelEl = document.getElementById(labelId);
+  if (labelEl) labelEl.innerText = `${role === 'site' ? 'Site' : 'Envelope'} Area: ${areaText}`;
+
+  if (role === 'site') {
+    siteLabelMarkers = labelMarkers;
+  } else {
+    EnvelopeLabelMarkers = labelMarkers;
   }
 }

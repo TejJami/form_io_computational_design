@@ -340,7 +340,7 @@ def get_project_polyline(request, project_id):
     try:
         project = Project.objects.get(pk=project_id)
         return JsonResponse({
-            "project_polyline": project.site_envelope  # Assuming this is a JSONField
+            "DJ_SITE_ENVELOPE": project.site_envelope  # match frontend expectation
         })
     except Project.DoesNotExist:
         return HttpResponseBadRequest("Invalid project ID")
