@@ -355,11 +355,9 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
 
     if (role === 'site') {
       sitePolygonId = feature.id;
-      saveSiteGeometry(feature.geometry);
 
 
-    } else {
-      EnvelopePolygonId = feature.id;
+    }  else if (role === 'Envelope') {
       handleSiteEvnelope(feature.geometry);
       updateEnvelopeSource(feature.geometry);
       clearEnvelopeLabels();
@@ -606,7 +604,7 @@ function handleSiteEvnelope(geometry) {
   updateInputs({
     envelope_vertices: formatted.vertices
   });
-  // compute(); // Recompute after saving
+  compute(); // Recompute after saving
 }
 
 
