@@ -19,126 +19,35 @@
             const DJ_SITE_BOUNDS = {{ DJ_SITE_BOUNDS|safe }};
             let DJ_SITE_ENVELOPE = {{ DJ_SITE_ENVELOPE|safe }};
         </script>
-
-        <style>
-            #container { position: relative; }
-            #container canvas, #overlay { position: absolute; }
-            #overlay {
-                pointer-events: auto;
-                z-index: 1;
-                width: 18%;
-                height: 100vh;
-                overflow-y: auto;
-                background-color: #f9f9f9;
-                padding: 10px;
-                padding-top: 70px;
-                box-sizing: border-box;
-                transition: transform 0.3s ease;
-            }
-            #overlay.collapsed {
-                transform: translateX(-100%);
-            }
-            #toggle-overlay {
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                left: auto;
-                z-index: 50;
-                background-color: #f9f9f9;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 5px 10px;
-                cursor: pointer;
-            }
-            #logo-container {
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                z-index: 2;
-            }
-            #logo-container img {
-                max-width: 150px;
-                height: auto;
-            }
-            #loader {
-                border: 5px solid #f3f3f3; /* Light grey */
-                border-top: 5px solid #3d3d3d; /* Grey */
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                animation: spin 1s linear infinite;
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                z-index: 2;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            .chat-box {
-                position: fixed;
-                bottom: 0;
-                right: 10px;
-                max-height: 400px;
-                width: 300px;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                background-color: #fff;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-                z-index: 1000;
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-end;
-            }
-
-            #chat-messages {
-                flex-grow: 1; /* Takes up available space */
-                overflow-y: auto; /* Enables vertical scrolling */
-                margin-bottom: 10px;
-                padding-right: 5px;
-                max-height: 300px; /* Optional: Constrain max height */
-            }
-
-            .chat-input {
-                display: flex;
-                flex-direction: row;
-                gap: 5px;
-                margin-top: 10px;
-            }
-
-            .chat-input textarea {
-                flex-grow: 1;
-                resize: none;
-            }
-
-
-        </style>
+ -->
     </head>
     <body>
         <!-- PROJECT CONTAINER -->
         <div id="project-info"
-            class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg m-0 p-0"
-            style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 20vw; max-width: 20vw;">
-            <div class="card-body p-0">
-                    <!-- Back Button --> 
-                    <div class="flex justify-between items-start">
-                        <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
+            class="card absolute z-50 bg-white border border-base-300 shadow-md rounded-lg"
+            style="position:absolute; top:0; left:0;top: 1rem; left: 1rem; width: 15vw; max-width: 15vw;">
+            
+            <div class="card-body px-4 py-2">
+                <!-- Inline Layout with Back Button on the Left -->
+                <div class="flex items-center space-x-2">
+                    <!-- Back Button -->
+                    <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline btn-circle">←</a>
+
+                    <!-- Project Name and Type -->
+                    <div class="leading-tight">
+                        <h2 class="text-3xl font-thin font-sans capitalize break-words"
+                            title="{{ project.name }}">
+                            {{ project.name|slice:":18" }}{% if project.name|length > 12 %}…{% endif %}
+                        </h2>
+                        <p class="text-xs text-gray-600 capitalize">
+                            {{ project.type }} project
+                        </p>
                     </div>
-
-                    <!-- Project Name -->
-                    <h2 class="text-3xl font-thin font-sans capitalize leading-tight break-words mt-2"
-                        title="{{ project.name }}">
-                    {{ project.name|slice:":18" }}{% if project.name|length > 12 %}…{% endif %}
-                    </h2>
-
-                    <!-- Project Type -->
-                    <p class="text-sm text-gray-600 capitalize mt-1">
-                    {{ project.type }} project
-                    </p>
+                </div>
             </div>
         </div>
+
+
         
         <!-- AREA AT BOTTUM LEFT CONTAINER -->
         <div id="area-display" style="position: absolute;bottom: 4px;left: 4px; background: white;border-radius: 6px;padding: 5px 5px;z-index: 999;
@@ -157,7 +66,7 @@
         <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
         <!-- TOOLBAR CONTAINER -->
-        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[14vw] max-w-[14vw] max-h-[50vh] overflow-y-auto space-y-2">
+        <div id="tool-panels" class="absolute z-50 top-4 right-4 w-[154w] max-w-[14vw] max-h-[80vh] overflow-y-auto space-y-2">
         
         <!-- SITE ENVELOPE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
@@ -171,15 +80,18 @@
             </div>
             </div>
             <div class="collapse-content p-0">
-            <div class="flex flex-wrap gap-2 p-1">
-                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Envelope">
-                <iconify-icon icon="ix:select-alt"></iconify-icon>
+            <div class="flex flex-wrap gap-2 p-0">
+                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Edit Envelope">
+                <iconify-icon icon="lucide:edit"></iconify-icon>
                 </button>
-                <button id="btn-envelope-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw envelope Polygon">
+                <button id="btn-envelope-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Envelope Polygon">
                 <iconify-icon icon="ph:polygon"></iconify-icon>
                 </button>
-                <button id="btn-envelope-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw envelope Rectangle">
+                <button id="btn-envelope-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Envelope Rectangle">
                 <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                </button>
+                <button id="btn-envelope-entrance" class="btn btn-neutral btn-outline btn-sm" title="Pick Envelope Entrance">
+                <iconify-icon icon="fluent:point-scan-24-regular"></iconify-icon>
                 </button>
                 <button id="btn-envelope-delete" class="btn btn-error btn-outline btn-sm" title="Delete envelope">
                 <iconify-icon icon="material-symbols-light:delete-outline"></iconify-icon>
@@ -200,15 +112,15 @@
             </div>
             </div>
             <div class="collapse-content p-0">
-            <div class="flex flex-wrap gap-2 p-1">
-                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Select Building">
-                <iconify-icon icon="ix:select-alt"></iconify-icon>
+            <div class="flex flex-wrap gap-2 p-0">
+                <button id="btn-bldg-select" class="btn btn-neutral btn-outline btn-sm" title="Edit Building">
+                <iconify-icon icon="lucide:edit"></iconify-icon>
                 </button>
-                <button id="btn-bldg-polygon" class="btn btn-neutral btn-outline btn-sm" title="Draw Polygon">
-                <iconify-icon icon="ph:polygon"></iconify-icon>
+                <button id="btn-bldg-line" class="btn btn-neutral btn-outline btn-sm" title="Draw line">
+                <iconify-icon icon="tabler:line"></iconify-icon>
                 </button>
-                <button id="btn-bldg-rectangle" class="btn btn-neutral btn-outline btn-sm" title="Draw Rectangle">
-                <iconify-icon icon="gis:rectangle-pt"></iconify-icon>
+                <button id="btn-bldg-polyline" class="btn btn-neutral btn-outline btn-sm" title="Draw Polyline">
+                <iconify-icon icon="gis:polyline-pt"></iconify-icon>
                 </button>
                 <button id="btn-bldg-delete" class="btn btn-error btn-outline btn-sm" title="Delete Building">
                 <iconify-icon icon="material-symbols-light:delete-outline-rounded"></iconify-icon>
@@ -217,7 +129,7 @@
             </div>
         </div>
 
-        <!-- TWEAK ENVELOPE TOOLS -->
+        <!-- TWEAK INPUTS TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
             <input type="checkbox" />
             <div class="collapse-title p-0">
@@ -229,7 +141,84 @@
             </div>
             </div>
             <div class="collapse-content p-0">
-            <div id="customise-inputs" class="p-1 space-y-2 mt-1">
+            <div id="customise-inputs" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
+
+                <!-- Injected Inputs -->
+            </div>
+            </div>
+        </div>
+
+        <!-- TWEAK INPUTS TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="building-tools" class="card bg-white border-0 rounded-none w-full">
+                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
+                <iconify-icon icon="mdi:tune-variant"></iconify-icon>
+                Tweak Buildings
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div id="customise-inputs-building" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
+
+                <!-- Injected Inputs -->
+            </div>
+            </div>
+        </div>
+
+         <!-- UNITMIX TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="unitmix-tools" class="card bg-white border-0 rounded-none w-full">
+                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
+                <iconify-icon icon="ix:mix"></iconify-icon>
+                Unit Mix
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div id="customise-inputs-unitmix" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
+
+                <!-- Injected Inputs -->
+            </div>
+            </div>
+        </div>
+
+        <!-- BASEMENT TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="basement-tools" class="card bg-white border-0 rounded-none w-full">
+                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
+                <iconify-icon icon="fluent:vehicle-car-parking-48-regular"></iconify-icon>
+                Tweak Basement
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div id="customise-inputs-basement" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
+
+                <!-- Injected Inputs -->
+            </div>
+            </div>
+        </div>
+
+         <!-- FACADE TOOLS -->
+        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
+            <input type="checkbox" />
+            <div class="collapse-title p-0">
+            <div id="facade-tools" class="card bg-white border-0 rounded-none w-full">
+                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
+                <iconify-icon icon="material-symbols:window-outline-sharp"></iconify-icon>
+                Tweak Facade
+                </p>
+            </div>
+            </div>
+            <div class="collapse-content p-0">
+            <div id="customise-inputs-facade" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
+
                 <!-- Injected Inputs -->
             </div>
             </div>
@@ -237,15 +226,38 @@
 
         </div>
 
-        <div id="chat-box" class="chat-box">
-                    <div id="chat-messages">
-                        <!-- Chat messages will be appended here -->
-                    </div>
-                    <div class="chat-input">
-                        <textarea id="chatbox" class="textarea textarea-bordered" placeholder="Type your prompt here..."></textarea>
-                        <button id="send_prompt" class="btn btn-primary">Send</button>
-                    </div>
+        <!-- PROJECT STAGE INDICATOR - Compact Bottom Center -->
+        <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
+        <ul class="steps">
+            <li class="step step-neutral font-sans ">Massing</li>
+            <li class="step step-neutral font-sans">Unit Mix</li>
+            <li class="step step-neutral font-sans ">Basement</li>
+            <li class="step font-sans ">Facade</li>
+            <li class="step font-sans ">Final Scheme</li>
+            <li class="step font-sans ">Documentation</li>
+            <li class="step font-sans ">Export</li>
+
+        </ul>
         </div>
+
+
+
+        <!-- Chat Box using DaisyUI -->
+        <div id="chat-box" class="fixed bottom-4 right-4 w-80 max-h-[400px] bg-base-100 shadow-xl rounded-xl p-4 z-50 flex flex-col justify-end space-y-2 border border-base-300">
+
+            <!-- Chat Messages Scroll Area -->
+            <div id="chat-messages" class="overflow-y-auto pr-2 flex-grow max-h-[300px] space-y-2">
+                <!-- Dynamically appended messages will appear here -->
+            </div>
+
+            <!-- Input + Send Area -->
+            <div class="chat-input flex gap-2 items-end">
+                <textarea id="chatbox" placeholder="Type your prompt here..." class="textarea textarea-bordered textarea-sm resize-none w-full" rows="2"></textarea>
+                <button id="send_prompt" class="btn btn-primary btn-sm shrink-0">Send</button>
+            </div>
+
+        </div>
+
 
     </body>
 </html>

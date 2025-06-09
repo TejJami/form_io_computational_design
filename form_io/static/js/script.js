@@ -219,7 +219,7 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
 
   document.getElementById('btn-envelope-delete').addEventListener('click', () => {
     if (!isEnvelopeSelectable) {
-      showToast('delete-blocked', 'Activate Envelope Selection to delete', 'warning');
+      showToast('delete-blocked', 'Activate "Edit Envelope" to delete', 'warning', 2000);
       return;
     }
 
@@ -247,13 +247,13 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
     if (isEnvelopeSelectable) {
       button.classList.add('btn-active');
       draw.changeMode('simple_select');
-      showToast('envelope-select-toast', 'Envelope selection mode', 'neutral');
-      console.log('[Form IO] Envelope selection mode ON');
+      showToast('envelope-select-toast', 'Envelope edit mode "On"', 'neutral');
+      console.log('[Form IO] Envelope edit mode ON');
     } else {
       button.classList.remove('btn-active');
       draw.changeMode('simple_select', { featureIds: [] });
       removeToast('envelope-select-toast');
-      console.log('[Form IO] Envelope selection mode OFF');
+      console.log('[Form IO] Envelope edit mode OFF');
     }
   });
 
@@ -301,7 +301,7 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
         source: 'Envelope',
         paint: {
           'fill-color': '#f97316',
-          'fill-opacity': 0.5
+          'fill-opacity': 0
         }
       });
 
@@ -334,7 +334,7 @@ document.getElementById('btn-envelope-polygon').addEventListener('click', () => 
       }
     });
 
-    map.fitBounds(siteBounds.bounds, { padding: 30, duration: 0 });
+    map.fitBounds(siteBounds.bounds, { padding: 0, duration: 0 });
     map.addLayer(customLayer);
   });
 
@@ -574,40 +574,6 @@ function saveSiteGeometry(geometry) {
   });
 }
 
-function handleSiteEvnelope(geometry) {
-  const coords = geometry.coordinates[0];
-  const originLngLat = coords[0];
-
-  const origin = mapboxgl.MercatorCoordinate.fromLngLat({
-    lng: originLngLat[0],
-    lat: originLngLat[1]
-  });
-
-  const points = coords.map(([lng, lat]) => {
-    const point = mapboxgl.MercatorCoordinate.fromLngLat({ lng, lat });
-    return {
-      x: point.x - origin.x,
-      y: point.y - origin.y,
-      z: 0
-    };
-  });
-
-  const relativePath = {
-    origin: { x: origin.x, y: origin.y, z: 0 },
-    points: points
-  };
-
-  saveSiteEvnelope(relativePath); // Persist to backend
-
-  refreshProjectPolyline()
-  // ✅ Trigger updateInputs after saving
-  const formatted = formatSiteEvnelopeAsStrings(relativePath);
-  console.log('[Form IO] Formatted envelope vertices:', formatted);
-  updateInputs({
-    envelope_vertices: formatted.vertices
-  });
-  compute(); // Recompute after saving
-}
 
 
 /**
@@ -652,7 +618,7 @@ async function saveSiteEvnelope(SiteEvnelope) {
 
 
 
-function getPaddedBounds(bounds, paddingDegrees = 0.001) {
+function getPaddedBounds(bounds, paddingDegrees = 0.0006) {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
 
@@ -947,6 +913,7 @@ function populateInputsUI(inputs) {
       inputField.classList.add('input', 'input-bordered', 'input-xs');
       if (input.type === 'text') {
         inputField.readOnly = true;
+        inputField.style.display = 'none';
       }
     }
 
@@ -983,62 +950,6 @@ function styleLabel(el) {
   el.style.border = '1px solid #ccc';
   el.style.boxShadow = '0 0 2px rgba(0, 0, 0, 0.2)';
   el.style.pointerEvents = 'none';
-}
-
-function clearSiteLabels() {
-  siteLabelMarkers.forEach(m => m.remove());
-  siteLabelMarkers = [];
-}
-
-function flatDistance(p1, p2) {
-  const c1 = mapboxgl.MercatorCoordinate.fromLngLat({ lng: p1[0], lat: p1[1] });
-  const c2 = mapboxgl.MercatorCoordinate.fromLngLat({ lng: p2[0], lat: p2[1] });
-
-  const dx = c2.x - c1.x;
-  const dy = c2.y - c1.y;
-
-  return Math.sqrt(dx * dx + dy * dy); // in meters
-}
-
-
-function showSiteBoundaryDimensions(feature) {
-  if (!feature || feature.geometry?.type !== 'Polygon') return;
-
-  // Clear previous edge length labels for the Site Bounds
-  clearSiteLabels();
-
-  const coords = feature.geometry.coordinates[0];
-
-  for (let i = 0; i < coords.length - 1; i++) {
-    const p1 = coords[i];
-    const p2 = coords[i + 1];
-
-    // const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
-    const dist = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
-
-    const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
-
-    const el = document.createElement('div');
-    el.innerText = `${dist.toFixed(1)} m`;
-    styleLabel(el);
-
-    const marker = new mapboxgl.Marker(el)
-      .setLngLat(mid)
-      .addTo(map);
-
-    siteLabelMarkers.push(marker);
-  }
-
-  // Compute and display site area in the fixed UI element
-  const area = turf.area(feature);
-  const areaText = area > 10000
-    ? `${(area / 10000).toFixed(2)} ha`
-    : `${area.toFixed(1)} m²`;
-
-  const labelEl = document.getElementById('site-area-label');
-  if (labelEl) {
-    labelEl.innerText = `Site Area: ${areaText}`;
-  }
 }
 
 
@@ -1083,20 +994,6 @@ function showSiteEvnelopeDimensions(geometry) {
   }
 }
 
-function formatSiteEvnelopeAsStrings(path) {
-  // Format origin as a comma-separated string
-  const origin = `${path.origin.x},${path.origin.y},${path.origin.z || 0}`;
-
-  // Format points as semicolon-separated "x,y,z" strings
-  const vertices = path.points
-    .map(pt => `${pt.x},${pt.y},${pt.z || 0}`)
-    .join(';');
-
-  return {
-    origin,
-    vertices
-  };
-}
 
 
 /**
@@ -1191,27 +1088,34 @@ function formatSiteBoundaryWithTurfDistances(siteGeoJSON) {
   return result;
 }
 
-/**
- * Displays a persistent toast message until removed manually.
- * @param {string} id - A unique ID for the toast (to target it later).
- * @param {string} message - Message to display.
- * @param {string} type - 'info', 'success', 'error', or 'warning'
- */
-function showToast(id, message, type = 'info') {
+function showToast(id, message, type = 'info', duration) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
   // Prevent duplicate toasts with the same ID
   if (document.getElementById(id)) return;
+
   console.log(`[Form IO] Toast shown: ${id} - ${message}`);
+
+  // Create toast element
   const toast = document.createElement('div');
   toast.className = `alert alert-${type}`;
   toast.id = id;
   toast.innerHTML = `<span>${message}</span>`;
 
+  // Append the toast to the container
   container.appendChild(toast);
-}
 
+  // If duration is provided, automatically remove the toast after specified time
+  if (typeof duration === 'number') {
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+        console.log(`[Form IO] Toast removed: ${id}`);
+      }
+    }, duration);
+  }
+}
 /**
  * Removes a toast by its unique ID.
  * @param {string} id - The toast ID to remove.
