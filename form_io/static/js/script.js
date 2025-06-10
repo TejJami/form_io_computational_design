@@ -44,7 +44,12 @@ function getInputs() {
   if (DJ_SITE_ENVELOPE) {
     inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(DJ_SITE_ENVELOPE);
   }
-
+  if (draw && DJ_SITE_ENVELOPE) {
+    const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+    const blockStr = formatBlockVertices(allBlocks, DJ_SITE_ENVELOPE);
+    inputs['block_vertices'] = blockStr;
+    console.log('[Form IO] blockStr recomputed in getInputs():', blockStr);
+  }
   return inputs;
 }
 
@@ -461,47 +466,43 @@ map.on('draw.create', function (e) {
       handlePolygonGeometry(feature.geometry, 'Envelope');
       showPolygonDimensions(feature.geometry, 'Envelope');
       break;
+
     case 'site':
       sitePolygonId = featureId;
       handlePolygonGeometry(feature.geometry, 'site');
       showPolygonDimensions(feature.geometry, 'site');
       break;
-      case 'block':
-        console.log('[Form IO] Block geometry created:', feature);
 
-        // Ensure role is explicitly set before saving
-        if (!feature.properties) feature.properties = {};
-        feature.properties.role = 'block';
+    case 'block':
+      console.log('[Form IO] Block geometry created:', feature);
 
-        draw.setFeatureProperty(feature.id, 'role', 'block');
+      feature.properties.role = 'block';
+      draw.setFeatureProperty(feature.id, 'role', 'block');
 
-        // Collect all blocks again now that current one is properly updated
-        const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+      const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+      const blockFeatures = allBlocks.map(f => ({
+        type: "Feature",
+        geometry: f.geometry,
+        properties: f.properties || {}
+      }));
 
-        const blockFeatures = allBlocks.map(f => ({
-          type: "Feature",
-          geometry: f.geometry,
-          properties: f.properties || {}
-        }));
+      saveBlocksToProject(blockFeatures);
 
-        console.log('[Form IO] Saving block geometries:', blockFeatures);
+      if (DJ_SITE_ENVELOPE) {
+        const blockStr = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
+        updateInputs({ block_vertices: blockStr });
+        compute();
+      }
 
-        saveBlocksToProject(blockFeatures);
-
-        // Re-arm draw mode
-        setTimeout(() => {
-          draw.changeMode(feature.geometry.type === 'Polygon' ? 'draw_polygon' : 'draw_line_string');
-          console.log('[Form IO] Re-armed draw mode for another block');
-        }, 100);
-        break;
-
-
+      setTimeout(() => {
+        draw.changeMode(feature.geometry.type === 'Polygon' ? 'draw_polygon' : 'draw_line_string');
+        console.log('[Form IO] Re-armed draw mode for another block');
+      }, 100);
+      break;
   }
 
   currentDrawRole = null;
 });
-
-
 
 
 // Update handler
@@ -512,31 +513,45 @@ map.on('draw.update', function (e) {
 
   if (!feature || !geometryType || !role) return;
 
-  // Handle envelope polygon updates
   if (role === 'Envelope' && geometryType === 'Polygon') {
     updateEnvelopeSource(feature.geometry);
     handlePolygonGeometry(feature.geometry, role);
     showPolygonDimensions(feature.geometry, role);
   }
 
-  // Handle site polygon updates
   else if (role === 'site' && geometryType === 'Polygon') {
     handlePolygonGeometry(feature.geometry, role);
     showPolygonDimensions(feature.geometry, role);
   }
 
-  // Handle block updates (Polygon or LineString)
   else if (role === 'block' && ['Polygon', 'LineString'].includes(geometryType)) {
-    // Optional: persist block or style differently
     console.log('[Form IO] Block geometry updated:', feature);
-    // Optionally call showPolygonDimensions only for polygon blocks
+
+    const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+    const blockFeatures = allBlocks.map(f => ({
+      type: "Feature",
+      geometry: f.geometry,
+      properties: f.properties || {}
+    }));
+
+    saveBlocksToProject(blockFeatures);
+
+    if (DJ_SITE_ENVELOPE) {
+      const blockStr = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
+      updateInputs({ block_vertices: blockStr });
+      compute();
+    }
+
     if (geometryType === 'Polygon') {
       showPolygonDimensions(feature.geometry, role);
     }
-  } else {
+  }
+
+  else {
     console.warn('[Form IO] Unhandled update:', role, geometryType);
   }
 });
+
 
 
 // Delete handler
@@ -1066,7 +1081,7 @@ function extractInputsFromGrasshopperData(data) {
 
       // Force known system-generated fields as text
       let type = "number";
-      if (["envelope_origin", "envelope_vertices"].includes(inputName)) {
+      if (["envelope_origin", "envelope_vertices","block_vertices"].includes(inputName)) {
         type = "text";
       } else {
         const paramType = inputMeta?.ParamType?.toLowerCase();
@@ -1109,7 +1124,7 @@ function populateInputsUI(inputs) {
 
     let inputField;
 
-    if (input.type === 'text' && typeof input.default === 'string' && input.default.includes(';')) {
+    if (input.type === 'text' && typeof input.default === 'string' ) {
       inputField = document.createElement('textarea');
       inputField.rows = 2;
       inputField.classList.add('textarea', 'textarea-bordered', 'textarea-xs');
@@ -1397,10 +1412,9 @@ async function handlePolygonGeometry(geometry, role) {
   };
 
   if (role === 'Envelope') {
-    await saveSiteEvnelope(relativePath);        // persist
-    await refreshProjectBlocksAndEnvelope();              // DJ_SITE_ENVELOPE now available
+    await saveSiteEvnelope(relativePath);
+    await refreshProjectBlocksAndEnvelope();
 
-    // ✅ Only now use it
     if (!DJ_SITE_ENVELOPE || !Array.isArray(DJ_SITE_ENVELOPE.points)) {
       console.warn('[Form IO] DJ_SITE_ENVELOPE not ready after refresh');
       return;
@@ -1408,8 +1422,30 @@ async function handlePolygonGeometry(geometry, role) {
 
     const formatted = formatSiteEvnelopeWithTurfDistances(DJ_SITE_ENVELOPE);
     updateInputs({ envelope_vertices: formatted });
-    compute(); // trigger Rhino solve
-  } else if (role === 'site') {
+    compute();
+  }
+
+  // ✅ NEW BLOCK HANDLING
+  else if (role === 'block') {
+    // Save all block geometries
+    const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
+    const blockFeatures = allBlocks.map(f => ({
+      type: "Feature",
+      geometry: f.geometry,
+      properties: f.properties || {}
+    }));
+
+    await saveBlocksToProject(blockFeatures);
+
+    // Format input string
+    const formatted = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
+    updateInputs({ block_vertices: formatted });
+
+    // Trigger recompute
+    compute();
+  }
+
+  else if (role === 'site') {
     saveSiteGeometry(geometry);
   }
 }
@@ -1508,3 +1544,52 @@ function drawBlocksFromBackend() {
 
   console.log('[Form IO] Re-rendered blocks from DJ_BLOCKS_ENVELOPE context');
 }
+
+
+
+function formatBlockVertices(blocks, envelopePath) {
+  if (
+    !envelopePath ||
+    !envelopePath.origin ||
+    !Array.isArray(envelopePath.points) ||
+    envelopePath.points.length === 0
+  ) {
+    console.warn("Invalid envelope path for block formatting.");
+    return '';
+  }
+
+  // Compute absolute origin in Mercator
+  const absOriginX = envelopePath.points[0].x + envelopePath.origin.x;
+  const absOriginY = envelopePath.points[0].y + envelopePath.origin.y;
+
+  // Convert absolute Mercator to LngLat
+  const originLngLat = new mapboxgl.MercatorCoordinate(absOriginX, absOriginY).toLngLat();
+  const originPoint = [originLngLat.lng, originLngLat.lat];
+
+  // Process each block
+  const formattedBlocks = blocks.map(feature => {
+    const geometry = feature.geometry;
+    const coords = geometry.type === 'Polygon'
+      ? geometry.coordinates[0]
+      : geometry.coordinates;
+
+    const relativePoints = coords.map(([lng, lat]) => {
+      const currentPoint = [lng, lat];
+
+      const eastRef = [currentPoint[0], originPoint[1]];
+      const xDist = turf.distance(originPoint, eastRef, { units: 'meters' });
+      const x = currentPoint[0] >= originPoint[0] ? xDist : -xDist;
+
+      const northRef = [originPoint[0], currentPoint[1]];
+      const yDist = turf.distance(originPoint, northRef, { units: 'meters' });
+      const y = currentPoint[1] >= originPoint[1] ? yDist : -yDist;
+
+      return `${x.toFixed(3)},${y.toFixed(3)},0.000`;
+    });
+
+    return relativePoints.join(';');
+  });
+
+  return formattedBlocks.join('/');
+}
+
