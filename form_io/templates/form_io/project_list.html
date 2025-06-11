@@ -180,8 +180,8 @@ function initializeMap() {
     style: 'mapbox://styles/mapbox/light-v11',
     center: [13.405, 52.52],
     zoom: 16,
-    pitch: 60,
-    bearing: -17.6,
+    pitch: 0,
+    bearing: 0,
     antialias: true
   });
 
@@ -190,6 +190,30 @@ function initializeMap() {
   });
 
   map.addControl(draw);
+
+  // map.on('load', () => {
+  //       // 3D Envelopes
+  //   map.addLayer({
+  //     id: '3d-buildings',
+  //     source: 'composite',
+  //     'source-layer': 'building',
+  //     filter: ['==', 'extrude', 'true'],
+  //     type: 'fill-extrusion',
+  //     minzoom: 15,
+  //     paint: {
+  //       'fill-extrusion-color': '#aaa',
+  //       'fill-extrusion-height': ['get', 'height'],
+  //       'fill-extrusion-base': ['get', 'min_height'],
+  //       'fill-extrusion-opacity': 0.3
+  //     }
+  //   });
+  //       // Hide street labels
+  //   map.getStyle().layers.forEach(layer => {
+  //     if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+  //       map.setLayoutProperty(layer.id, 'visibility', 'none');
+  //     }
+  //   });
+  // });
 
   map.on('click', function (e) {
     draw.deleteAll();

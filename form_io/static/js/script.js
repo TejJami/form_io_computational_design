@@ -612,11 +612,15 @@ map.on('draw.selectionchange', (e) => {
     selected.properties = {};
   }
 
-  // Assign role if missing and currentDrawRole is active
-  if (!selected.properties.role && currentDrawRole) {
-    selected.properties.role = currentDrawRole;
-    draw.setFeatureProperty(selected.id, 'role', currentDrawRole);
-  }
+// Only assign role if it is missing and currentDrawRole is defined
+if (!selected.properties.role && currentDrawRole) {
+  selected.properties.role = currentDrawRole;
+  draw.setFeatureProperty(selected.id, 'role', currentDrawRole);
+} else if (selected.properties.role && selected.properties.role !== currentDrawRole) {
+  // Prevent accidental reassignment
+  console.log(`[Form IO] Preserved existing role "${selected.properties.role}" (currentDrawRole was "${currentDrawRole}")`);
+}
+
 
   // Envelope selection logic
   if (selected.properties.role === 'Envelope') {
