@@ -31,25 +31,49 @@ init()
 
 function getInputs() {
   const inputs = {};
-  document.querySelectorAll('#customise-inputs input, #customise-inputs textarea').forEach(input => {
-    const id = input.id;
-    if (input.type === 'checkbox') {
-      inputs[id] = input.checked ? 1 : 0;
-    } else {
-      const parsed = Number(input.value);
-      inputs[id] = isNaN(parsed) ? input.value : parsed;
-    }
+  const selectors = [
+    '#customise-inputs input',
+    '#customise-inputs textarea',
+    '#customise-inputs select',
+    '#customise-inputs-building input',
+    '#customise-inputs-building textarea',
+    '#customise-inputs-building select',
+    '#customise-inputs-unitmix input',
+    '#customise-inputs-unitmix textarea',
+    '#customise-inputs-unitmix select',
+    '#customise-inputs-basement input',
+    '#customise-inputs-basement textarea',
+    '#customise-inputs-basement select',
+    '#customise-inputs-facade input',
+    '#customise-inputs-facade textarea',
+    '#customise-inputs-facade select',
+  ];
+
+  selectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(input => {
+      const id = input.id;
+      if (!id) return;
+      if (input.type === 'checkbox') {
+        inputs[id] = input.checked ? 1 : 0;
+      } else {
+        const parsed = Number(input.value);
+        inputs[id] = isNaN(parsed) ? input.value : parsed;
+      }
+    });
   });
 
+  // Extra computed inputs
   if (DJ_SITE_ENVELOPE) {
     inputs['envelope_vertices'] = formatSiteEvnelopeWithTurfDistances(DJ_SITE_ENVELOPE);
   }
   if (draw && DJ_SITE_ENVELOPE) {
     const allBlocks = draw.getAll().features.filter(f => f.properties?.role === 'block');
     const blockStr = formatBlockVertices(allBlocks, DJ_SITE_ENVELOPE);
-    inputs['block_vertices'] = blockStr;
+    inputs['envelope_block_vertices'] = blockStr;
     console.log('[Form IO] blockStr recomputed in getInputs():', blockStr);
   }
+
+  console.log('[Form IO] getInputs():', inputs);
   return inputs;
 }
 
@@ -490,7 +514,7 @@ map.on('draw.create', function (e) {
 
       if (DJ_SITE_ENVELOPE) {
         const blockStr = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
-        updateInputs({ block_vertices: blockStr });
+        updateInputs({ envelope_block_vertices: blockStr });
         compute();
       }
 
@@ -538,7 +562,7 @@ map.on('draw.update', function (e) {
 
     if (DJ_SITE_ENVELOPE) {
       const blockStr = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
-      updateInputs({ block_vertices: blockStr });
+      updateInputs({ envelope_block_vertices: blockStr });
       compute();
     }
 
@@ -1034,15 +1058,27 @@ function onSliderChange() {
 
 // Dynamically attach events to all inputs in overlay
 function registerInputListeners() {
-  document
-    .querySelectorAll('#customise-inputs input, #customise-inputs textarea, #customise-inputs select')
-    .forEach(input => {
+  const selectors = [
+    '#customise-inputs',
+    '#customise-inputs-building',
+    '#customise-inputs-unitmix',
+    '#customise-inputs-basement',
+    '#customise-inputs-facade'
+  ];
+
+  selectors.forEach(selector => {
+    document.querySelectorAll(`${selector} input, ${selector} textarea, ${selector} select`).forEach(input => {
+      input.removeEventListener('input', onSliderChange); // avoid duplicates
       input.addEventListener('input', onSliderChange, false);
       input.addEventListener('change', onSliderChange, false);
       input.addEventListener('mouseup', onSliderChange, false);
       input.addEventListener('touchend', onSliderChange, false);
     });
+  });
+
+  console.log('[Form IO] Input listeners bound for all tool panels.');
 }
+
 
 
 
@@ -1085,7 +1121,7 @@ function extractInputsFromGrasshopperData(data) {
 
       // Force known system-generated fields as text
       let type = "number";
-      if (["envelope_origin", "envelope_vertices","block_vertices"].includes(inputName)) {
+      if (["envelope_origin", "envelope_vertices","envelope_block_vertices"].includes(inputName)) {
         type = "text";
       } else {
         const paramType = inputMeta?.ParamType?.toLowerCase();
@@ -1109,51 +1145,103 @@ function extractInputsFromGrasshopperData(data) {
 
 
 /**
- * Dynamically generates the input UI form in the overlay panel.
- * Supports number, checkbox, and text types (e.g. string parameters like envelope_vertices).
+ * Dynamically generates input fields and assigns them to appropriate UI sections
+ * based on naming prefixes like "envelope_", "block", "unitmix_", etc.
+ *
+ * For blocks, inputs are grouped under collapsible divs per block (e.g., block1, block2).
  *
  * @param {Array} inputs - Array of input objects with { name, default, type }
  */
 function populateInputsUI(inputs) {
-  const customiseContainer = document.getElementById('customise-inputs');
-  customiseContainer.innerHTML = ''; // Clear previous inputs
+  const containerMap = {
+    envelope: document.getElementById('customise-inputs'),
+    unitmix: document.getElementById('customise-inputs-unitmix'),
+    basement: document.getElementById('customise-inputs-basement'),
+    facade: document.getElementById('customise-inputs-facade'),
+  };
+
+  const buildingContainer = document.getElementById('customise-inputs-building');
+  buildingContainer.innerHTML = ''; // clear before rebuild
+
+  const blockDivs = {}; // Map of blockN => container div
 
   inputs.forEach(input => {
-    const control = document.createElement('div');
-    control.classList.add('form-control', 'text-xs'); // smaller text
+    const { name, default: defaultValue, type } = input;
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.classList.add('form-control', 'text-xs');
 
     const label = document.createElement('label');
     label.classList.add('label', 'text-xs', 'font-medium', 'text-gray-500');
-    label.textContent = input.name;
+    label.textContent = name;
 
     let inputField;
 
-    if (input.type === 'text' && typeof input.default === 'string' ) {
+    if (type === 'text' && typeof defaultValue === 'string') {
       inputField = document.createElement('textarea');
       inputField.rows = 2;
       inputField.classList.add('textarea', 'textarea-bordered', 'textarea-xs');
       inputField.readOnly = true;
     } else {
       inputField = document.createElement('input');
-      inputField.type = input.type;
+      inputField.type = type;
       inputField.classList.add('input', 'input-bordered', 'input-xs');
-      if (input.type === 'text') {
+      if (type === 'text') {
         inputField.readOnly = true;
         inputField.style.display = 'none';
       }
     }
 
-    inputField.id = input.name;
-    inputField.name = input.name;
-    inputField.value = input.default;
+    inputField.id = name;
+    inputField.name = name;
+    inputField.value = defaultValue;
 
-    control.appendChild(label);
-    control.appendChild(inputField);
-    customiseContainer.appendChild(control);
+    inputWrapper.appendChild(label);
+    inputWrapper.appendChild(inputField);
+
+    // Assign to the correct category
+    if (name.startsWith('envelope_')) {
+      containerMap.envelope.appendChild(inputWrapper);
+    } else if (name.startsWith('unitmix_')) {
+      containerMap.unitmix.appendChild(inputWrapper);
+    } else if (name.startsWith('basement_')) {
+      containerMap.basement.appendChild(inputWrapper);
+    } else if (name.startsWith('facade_')) {
+      containerMap.facade.appendChild(inputWrapper);
+    } else if (/^block\d+_/.test(name)) {
+      const match = name.match(/^block(\d+)_/);
+      const blockNum = match ? match[1] : 'unknown';
+      const blockKey = `block${blockNum}`;
+      if (!blockDivs[blockKey]) {
+        const collapsible = document.createElement('div');
+        collapsible.className = 'collapse border rounded-md bg-gray-50 p-0';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+
+        const title = document.createElement('div');
+        title.className = 'collapse-title text-xs font-light';
+        title.textContent = `Block ${blockNum}`;
+
+        const content = document.createElement('div');
+        content.className = 'collapse-content p-1 space-y-2';
+        content.id = `block-div-${blockNum}`;
+
+        collapsible.appendChild(checkbox);
+        collapsible.appendChild(title);
+        collapsible.appendChild(content);
+        buildingContainer.appendChild(collapsible);
+
+        blockDivs[blockKey] = content;
+      }
+
+      blockDivs[blockKey].appendChild(inputWrapper);
+    }
   });
 
   registerInputListeners();
 }
+
 
 
 
@@ -1443,7 +1531,7 @@ async function handlePolygonGeometry(geometry, role) {
 
     // Format input string
     const formatted = formatBlockVertices(blockFeatures, DJ_SITE_ENVELOPE);
-    updateInputs({ block_vertices: formatted });
+    updateInputs({ envelope_block_vertices: formatted });
 
     // Trigger recompute
     compute();
