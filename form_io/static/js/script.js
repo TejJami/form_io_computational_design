@@ -8,7 +8,7 @@ loader.setLibraryPath('https://unpkg.com/rhino3dm@8.0.0-beta3/')
 
 const data = {
   // definition: 'form_io_main_002.gh',
-  definition: 'test_main_2.gh',
+  definition: 'test_main_4.gh',
 
   inputs: {}  // initialize as empty
 }

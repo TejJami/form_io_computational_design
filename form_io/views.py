@@ -63,9 +63,9 @@ def solve_grasshopper(request):
             payload = {"algo": encoded, "pointer": None, "values": values}
             response = requests.post(post_url, json=payload)
 
-            if response.status_code != 200:
-                print("Compute server error:", response.text)
-                return JsonResponse({"success": False, "error": response.text}, status=response.status_code)
+            # if response.status_code != 200:
+            #     print("Compute server error:", response.text)
+            #     return JsonResponse({"success": False, "error": response.text}, status=response.status_code)
 
             # 5. Parse and Return Result
             res_data = response.json()
