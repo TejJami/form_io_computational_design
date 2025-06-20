@@ -237,7 +237,7 @@ function init() {
   const modes = MapboxDraw.modes;
   modes.draw_rectangle_drag = mapboxGLDrawRectangleDrag;
   // Initialize the drawing control with the extended modes
-  const draw = new MapboxDraw({
+  draw = new MapboxDraw({
     displayControlsDefault: false,
     modes: modes
   });
@@ -1683,4 +1683,125 @@ function formatBlockVertices(blocks, envelopePath) {
 
   return formattedBlocks.join('/');
 }
+
+document.getElementById('styleSwitcher').addEventListener('change', function (e) {
+  const selectedStyle = e.target.value;
+  if (!map) return;
+
+  // Apply new Mapbox style
+  map.setStyle('mapbox://styles/' + selectedStyle);
+
+  map.once('style.load', () => {
+    console.log('[StyleSwitcher] Style loaded:', selectedStyle);
+
+    // Re-add drawing control if missing
+    if (!map._controls.includes(draw)) {
+      map.addControl(draw);
+    }
+
+    // Re-add custom 3D Rhino layer
+    if (!map.getLayer('rhino-layer')) {
+      try {
+        map.addLayer(customLayer);
+      } catch (err) {
+        console.warn('[StyleSwitcher] Failed to add customLayer:', err);
+      }
+    }
+
+    // Re-add GeoJSON source/layer for site
+    if (DJ_SITE_BOUNDS?.features?.length) {
+      if (!map.getSource('site')) {
+        map.addSource('site', {
+          type: 'geojson',
+          data: DJ_SITE_BOUNDS
+        });
+      }
+
+      if (!map.getLayer('site-boundary')) {
+        map.addLayer({
+          id: 'site-boundary',
+          type: 'fill',
+          source: 'site',
+          paint: {
+            'fill-color': '#3b82f6',
+            'fill-opacity': 0
+          }
+        });
+      }
+    }
+
+    // Re-add GeoJSON source/layer for Envelope
+    const envelopeGeo = siteenvelopeToGeoJSON(DJ_SITE_ENVELOPE);
+    if (envelopeGeo) {
+      if (!map.getSource('Envelope')) {
+        map.addSource('Envelope', {
+          type: 'geojson',
+          data: envelopeGeo
+        });
+      }
+
+      if (!map.getLayer('Envelope-boundary')) {
+        map.addLayer({
+          id: 'Envelope-boundary',
+          type: 'fill',
+          source: 'Envelope',
+          paint: {
+            'fill-color': '#f97316',
+            'fill-opacity': 0
+          }
+        });
+      }
+    }
+
+    // Re-add 3D buildings layer
+    if (!map.getLayer('3d-buildings')) {
+      map.addLayer({
+        id: '3d-buildings',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', 'extrude', 'true'],
+        type: 'fill-extrusion',
+        minzoom: 15,
+        paint: {
+          'fill-extrusion-color': '#aaa',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': ['get', 'min_height'],
+          'fill-extrusion-opacity': 1
+        }
+      });
+    }
+
+    // Restore draw features (blocks, Envelope, site, etc.)
+    try {
+      const allFeatures = draw.getAll();
+      draw.set(allFeatures);
+    } catch (e) {
+      console.warn('[StyleSwitcher] Failed to restore draw features:', e);
+    }
+
+    // Restore envelope dimension labels
+    if (DJ_SITE_ENVELOPE?.points?.length) {
+      const geo = siteenvelopeToGeoJSON(DJ_SITE_ENVELOPE);
+      if (geo) showSiteEvnelopeDimensions(geo.geometry);
+    }
+
+    // Hide POI labels but keep streets and buildings
+    map.getStyle().layers.forEach(layer => {
+      if (
+        layer.type === 'symbol' &&
+        layer.layout?.['text-field'] &&
+        (
+          layer.id.includes('poi') ||
+          layer.id.includes('transit') ||
+          layer.id.includes('airport') ||
+          layer.id.includes('park')
+        )
+      ) {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+      }
+    });
+
+    console.log('[StyleSwitcher] Custom layers, sources, and features restored safely.');
+  });
+});
 

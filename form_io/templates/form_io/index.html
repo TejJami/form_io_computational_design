@@ -50,19 +50,35 @@
 
 
         
-        <!-- AREA AT BOTTUM LEFT CONTAINER -->
-        <div id="area-display" style="position: absolute;bottom: 4px;left: 4px; background: white;border-radius: 6px;padding: 5px 5px;z-index: 999;
-                    pointer-events: none;" class="text-sm text-gray-700">
-                    <div id="site-area-label">Site Area: --</div>
-                    <div id="Envelope-area-label">Envelope Area: --</div>
+        <!-- AREA AT BOTTOM LEFT CONTAINER -->
+        <div id="area-display" style="position: absolute; bottom: 4px; left: 4px; background: white; border-radius: 6px; padding: 5px 10px; z-index: 999; pointer-events: auto;" class="text-sm text-gray-700 space-y-1">
+
+        <!-- Site and Envelope Area Info -->
+        <div id="site-area-label">Site Area: --</div>
+        <div id="Envelope-area-label">Envelope Area: --</div>
+
+        <!-- Map Style Dropdown -->
+        <div class="flex items-center gap-2 mt-2">
+            <label for="styleSwitcher" class="text-xs text-gray-600 whitespace-nowrap">Map Style:</label>
+            <select id="styleSwitcher" class="select select-xs select-bordered w-60">
+            <option value="mapbox/streets-v12">Streets</option>
+            <option value="mapbox/outdoors-v12">Outdoors</option>
+            <option value="mapbox/light-v11" selected>Light</option>
+            <option value="mapbox/satellite-streets-v12">Satellite Streets</option>
+            </select>
         </div>
+
+        </div>
+
+
 
         <!-- Toast container for persistent toasts -->
         <div id="toast-container" class="toast toast-top toast-center z-50 "></div>
 
-        <!-- LOADER CONTAINER -->
-        <div id="loader" class="border-4 border-gray-300 z-50 border-t-gray-800 rounded-full w-10 h-10 animate-spin absolute top-1/2 left-1/2 z-50 hidden"></div>
-      
+        <!-- LOADER CONTAINER with fade -->
+        <div id="loader" class="transition-opacity duration-300 opacity-0 pointer-events-none border-4 border-gray-300 z-50 border-t-gray-800 rounded-full w-10 h-10 animate-spin fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden"></div>
+
+
         <!-- THREEJS MAP CONTAINER -->
         <div id="map" style="position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0;"></div>
 
