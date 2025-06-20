@@ -1239,6 +1239,8 @@ function populateInputsUI(inputs) {
   });
 
   registerInputListeners();
+  initializeStageFromInput(); 
+  setupStageNavigation();
 }
 
 
@@ -1246,11 +1248,12 @@ function populateInputsUI(inputs) {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-  preloadInputs(PROJECT_INPUTS);  // okay if these exist
-  registerInputListeners();       // not harmful, but won't bind to anything yet
+  preloadInputs(PROJECT_INPUTS);  
+  registerInputListeners();       
 
-  // ✅ Load GH UI and compute when ready
+  // Wait for dynamic input UI to be built
   await fetchGrasshopperInputs(data.definition);
+
 });
 
 let labelMarkers = [];
@@ -1804,4 +1807,81 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
     console.log('[StyleSwitcher] Custom layers, sources, and features restored safely.');
   });
 });
+
+/**
+ * Maps stage index to envelope_mode:
+ * 0 → 0 (Massing)
+ * 1 → 1 (Floorplans)
+ * 2+ → 2 (Facade, Mockup, Export)
+ */
+const envelopeModeMap = [0, 1, 2, 2, 2];
+
+/**
+ * Current stage index tracker (0-4)
+ */
+let currentStage = 0;
+
+/**
+ * Updates visual steps and sets envelope_mode value
+ */
+function updateStageUI() {
+  const steps = document.querySelectorAll('.stage-step');
+  const envelopeInput = document.getElementById('envelope_mode');
+  console.log(envelopeInput, steps);
+  if (!envelopeInput || steps.length === 0) return;
+
+  // Update step highlight
+  steps.forEach((step, index) => {
+    step.classList.toggle('step-neutral', index <= currentStage);
+  });
+
+  // Set and apply mapped envelope_mode
+  const mode = envelopeModeMap[currentStage];
+  envelopeInput.value = mode;
+
+  // Trigger recompute/save
+  onSliderChange();
+  console.log(`[Stage] Now at stage ${currentStage}, envelope_mode: ${mode}`);
+}
+
+/**
+ * Initializes step navigation buttons
+ */
+function setupStageNavigation() {
+  const prevBtn = document.getElementById('prevStageBtn');
+  const nextBtn = document.getElementById('nextStageBtn');
+
+  if (!prevBtn || !nextBtn) {
+    console.warn('[StageNav] Navigation buttons not found.');
+    return;
+  }
+
+  prevBtn.addEventListener('click', () => {
+    if (currentStage > 0) {
+      currentStage--;
+      updateStageUI();
+    }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentStage < envelopeModeMap.length - 1) {
+      currentStage++;
+      updateStageUI();
+    }
+  });
+}
+
+/**
+ * On load, read envelope_mode and highlight appropriate stage
+ */
+function initializeStageFromInput() {
+  console.log('[Form IO] Initializing stage from envelope_mode input...');
+  const envelopeInput = document.getElementById('envelope_mode');
+  if (!envelopeInput) return;
+
+  const currentMode = parseInt(envelopeInput.value);
+  const matchIndex = envelopeModeMap.findIndex(m => m === currentMode);
+  currentStage = matchIndex !== -1 ? matchIndex : 0;
+  updateStageUI();
+}
 

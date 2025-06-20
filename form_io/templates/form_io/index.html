@@ -187,43 +187,6 @@
             </div>
         </div>
 
-         <!-- UNITMIX TOOLS -->
-        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
-            <input type="checkbox" />
-            <div class="collapse-title p-0">
-            <div id="unitmix-tools" class="card bg-white border-0 rounded-none w-full">
-                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
-                <iconify-icon icon="ix:mix"></iconify-icon>
-                Unit Mix
-                </p>
-            </div>
-            </div>
-            <div class="collapse-content p-0">
-            <div id="customise-inputs-unitmix" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
-
-                <!-- Injected Inputs -->
-            </div>
-            </div>
-        </div>
-
-        <!-- BASEMENT TOOLS -->
-        <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
-            <input type="checkbox" />
-            <div class="collapse-title p-0">
-            <div id="basement-tools" class="card bg-white border-0 rounded-none w-full">
-                <p class="text-sm text-gray-600 p1 flex items-center gap-2">
-                <iconify-icon icon="fluent:vehicle-car-parking-48-regular"></iconify-icon>
-                Tweak Basement
-                </p>
-            </div>
-            </div>
-            <div class="collapse-content p-0">
-            <div id="customise-inputs-basement" class="p-1 space-y-2 mt-1" style="max-height: 300px; overflow-y: auto;">
-
-                <!-- Injected Inputs -->
-            </div>
-            </div>
-        </div>
 
          <!-- FACADE TOOLS -->
         <div class="collapse collapse-arrow bg-white border border-base-300 shadow-md rounded-lg">
@@ -247,17 +210,29 @@
         </div>
 
         <!-- PROJECT STAGE INDICATOR - Compact Bottom Center -->
-        <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
-        <ul class="steps">
-            <li class="step step-neutral font-sans ">Massing</li>
-            <li class="step font-sans">Unit Mix</li>
-            <li class="step font-sans ">Floorplans</li>
-            <li class="step font-sans ">Facade</li>
-            <li class="step font-sans ">Documentation</li>
-            <li class="step font-sans ">Export</li>
+<div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
+   <div class="flex justify-center gap-4">
+  <button id="prevStageBtn" class="btn btn-xs btn-outline btn-neutral">
+    <iconify-icon icon="ooui:next-rtl"></iconify-icon>
+    </button>
+  <button id="nextStageBtn" class="btn btn-xs btn-outline btn-neutral">
+    <iconify-icon icon="ooui:next-ltr"></iconify-icon>
+</button>
+</div>
+    <div class="steps" id="stage-steps">
+    <li class="step font-sans stage-step step-neutral" data-stage="0">Massing</li>
+    <li class="step font-sans stage-step" data-stage="1">Floorplans</li>
+    <li class="step font-sans stage-step" data-stage="2">Facade</li>
+    <li class="step font-sans stage-step" data-stage="3">Mockup</li>
+    <li class="step font-sans stage-step" data-stage="4">Export</li>
 
-        </ul>
-        </div>
+  </div>
+
+
+</div>
+
+
+
 
 
 
