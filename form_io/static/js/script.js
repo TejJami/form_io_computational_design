@@ -127,8 +127,7 @@ function getMercatorUnitsPerMeterAtOrigin(originLngLat) {
 function meshToThreejs(mesh) {
   const loader = new THREE.BufferGeometryLoader();
   const geometry = loader.parse(mesh.toThreejsJSON());
-
-
+  
 
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
@@ -446,7 +445,7 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
         'fill-extrusion-color': '#aaa',
         'fill-extrusion-height': ['get', 'height'],
         'fill-extrusion-base': ['get', 'min_height'],
-        'fill-extrusion-opacity': 0.3
+        'fill-extrusion-opacity': 1
       }
     });
 

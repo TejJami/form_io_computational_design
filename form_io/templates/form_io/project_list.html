@@ -120,17 +120,24 @@
       </div>
     </div>
 
+    <div class="flex items-center gap-2 px-6 pt-2 pb-2">
+      <label for="styleSwitcher" class="text-sm font-light">Map Style:</label>
+      <select id="styleSwitcher" class="select select-sm select-bordered">
+        <option value="mapbox/streets-v12">Streets</option>
+        <option value="mapbox/outdoors-v12">Outdoors</option>
+        <option value="mapbox/light-v11" selected>Light</option>
+        <option value="mapbox/satellite-streets-v12">Satellite Streets</option>
+      </select>
+    </div>
+
     <!-- Map + Button -->
     <div class="h-[calc(75vh-6rem)] px-6 pb-6">
      
-      <div class="text-xs text-gray-500 px-6 pt-2 font-thin">
-        Click on the map to pick a location for your project.
-      </div>
 
       <div id="map" class="w-full h-full border rounded-md"></div>
 
       <div class="flex justify-end mt-4">
-        <button class="btn btn-neutral btn-outline btm-sm" onclick="submitNewProject()">Create</button>
+        <button class="btn btn-neutral btn-outline btm-xs" onclick="submitNewProject()">Create</button>
       </div>
     </div>
   </div>
@@ -191,29 +198,7 @@ function initializeMap() {
 
   map.addControl(draw);
 
-  // map.on('load', () => {
-  //       // 3D Envelopes
-  //   map.addLayer({
-  //     id: '3d-buildings',
-  //     source: 'composite',
-  //     'source-layer': 'building',
-  //     filter: ['==', 'extrude', 'true'],
-  //     type: 'fill-extrusion',
-  //     minzoom: 15,
-  //     paint: {
-  //       'fill-extrusion-color': '#aaa',
-  //       'fill-extrusion-height': ['get', 'height'],
-  //       'fill-extrusion-base': ['get', 'min_height'],
-  //       'fill-extrusion-opacity': 0.3
-  //     }
-  //   });
-  //       // Hide street labels
-  //   map.getStyle().layers.forEach(layer => {
-  //     if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
-  //       map.setLayoutProperty(layer.id, 'visibility', 'none');
-  //     }
-  //   });
-  // });
+
 
   map.on('click', function (e) {
     draw.deleteAll();
@@ -231,6 +216,19 @@ function initializeMap() {
   });
   map.addControl(geocoder, 'top-left');
 }
+
+document.getElementById('styleSwitcher').addEventListener('change', function (e) {
+  const selectedStyle = e.target.value;
+  if (map) {
+    map.setStyle('mapbox://styles/' + selectedStyle);
+
+    // Re-add controls after style change
+    map.once('styledata', () => {
+      map.addControl(draw);
+    });
+  }
+});
+
 
 function createRectangle(center, sizeMeters) {
   const halfSize = sizeMeters / 2;

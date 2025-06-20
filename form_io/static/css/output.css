@@ -1244,6 +1244,11 @@ video {
   cursor: not-allowed;
 }
 
+.select-sm {
+  --size: calc(var(--size-field, 0.25rem) * 8);
+  font-size: 0.75rem;
+}
+
 @keyframes skeleton {
   0% {
     background-position: 150%;
@@ -1585,16 +1590,6 @@ video {
   isolation: isolate;
 }
 
-.btn-primary {
-  --btn-color: var(--color-primary);
-  --btn-fg: var(--color-primary-content);
-}
-
-.btn-accent {
-  --btn-color: var(--color-accent);
-  --btn-fg: var(--color-accent-content);
-}
-
 .btn-neutral {
   --btn-color: var(--color-neutral);
   --btn-fg: var(--color-neutral-content);
@@ -1776,6 +1771,11 @@ video {
 .floating-label:has(.input-xs, .select-xs, .textarea-xs) span {
   font-size: 0.6875rem;
   top: calc(var(--size-field, 0.25rem) * 6 / 2);
+}
+
+.floating-label:has(.input-sm, .select-sm, .textarea-sm) span {
+  font-size: 0.75rem;
+  top: calc(var(--size-field, 0.25rem) * 8 / 2);
 }
 
 .fieldset {
@@ -3437,6 +3437,10 @@ video {
   margin-right: auto;
 }
 
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
 .mb-4 {
   margin-bottom: 1rem;
 }
@@ -3499,6 +3503,10 @@ video {
 
 .h-full {
   height: 100%;
+}
+
+.h-\[85vh\] {
+  height: 85vh;
 }
 
 .max-h-\[100px\] {
@@ -3850,6 +3858,10 @@ video {
 
 .font-extralight {
   font-weight: 200;
+}
+
+.font-light {
+  font-weight: 300;
 }
 
 .font-thin {
