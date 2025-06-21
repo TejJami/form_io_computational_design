@@ -175,6 +175,8 @@ function replaceCurrentMesh(mesh, type) {
     meshoutMesh = mesh
     threeScene.add(meshoutMesh)
   }
+
+  
   console.log(`[Form IO] Replaced current mesh with type: ${type}`)
   map.triggerRepaint(); // Explicitly force re-render
 
@@ -1906,6 +1908,6 @@ function moveToInitialPosition(mode) {
     pitch: pitch,  // Apply different pitch for inclined view (45) or top-down view (0)
     bearing: bearing,
     essential: true,  // Ensures the camera movement is essential, causing a smooth transition
-    duration: 2000   // Transition time in milliseconds
+    duration: 3000   // Transition time in milliseconds
   });
 }
