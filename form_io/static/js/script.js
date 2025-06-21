@@ -944,6 +944,11 @@ function updateInputs(parameters, suppressTrigger = false) {
     }
   });
 
+  // Check if envelope_mode was among updated inputs
+  if ('envelope_mode' in parameters) {
+    syncStageWithEnvelopeMode();
+  }
+
   if (!suppressTrigger) {
     onSliderChange(); // Triggers recompute
   }
@@ -1256,15 +1261,6 @@ function populateInputsUI(inputs) {
   setupStageNavigation();
 }
 
-
-// document.addEventListener('DOMContentLoaded', async () => {
-//   preloadInputs(PROJECT_INPUTS);  
-//   registerInputListeners();       
-
-//   // Wait for dynamic input UI to be built
-//   await fetchGrasshopperInputs(data.definition);
-
-// });
 
 let labelMarkers = [];
 
@@ -1700,20 +1696,23 @@ function formatBlockVertices(blocks, envelopePath) {
 document.getElementById('styleSwitcher').addEventListener('change', function (e) {
   const newStyle = e.target.value;
 
-  // Save to backend
+  // Save the selection to the backend
   fetch(`/api/projects/${PROJECT_ID}/save/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-CSRFToken': getCSRFToken()
     },
-    body: JSON.stringify({ map_style: newStyle })  // Send new style to backend
+    body: JSON.stringify({ map_style: newStyle })
   }).then(() => {
-    location.reload(); // Apply updated style
+    if (map && map.setStyle) {
+      map.setStyle(`mapbox://styles/${newStyle}`);  // Change style dynamically
+    }
   }).catch(err => {
     console.error('Failed to update map style:', err);
   });
 });
+
 
 
 /**
@@ -1788,8 +1787,29 @@ function initializeStageFromInput() {
   if (!envelopeInput) return;
 
   const currentMode = parseInt(envelopeInput.value);
-  const matchIndex = envelopeModeMap.findIndex(m => m === currentMode);
-  currentStage = matchIndex !== -1 ? matchIndex : 0;
+  if (isNaN(currentMode)) {
+    console.warn('[Form IO] Invalid envelope_mode input value.');
+    return;
+  }
+
+  // Find the first stage whose mapped mode matches the current envelope_mode
+  const matchedIndex = envelopeModeMap.findIndex(mode => mode === currentMode);
+  currentStage = matchedIndex !== -1 ? matchedIndex : 0;
+
   updateStageUI();
 }
 
+function syncStageWithEnvelopeMode() {
+  const envelopeInput = document.getElementById('envelope_mode');
+  if (!envelopeInput) return;
+
+  const mode = parseInt(envelopeInput.value);
+  if (isNaN(mode)) return;
+
+  const matchedIndex = envelopeModeMap.findIndex(m => m === mode);
+  if (matchedIndex !== -1 && matchedIndex !== currentStage) {
+    currentStage = matchedIndex;
+    updateStageUI();
+    console.log(`[Sync] Synced currentStage to envelope_mode: ${mode} → stage ${matchedIndex}`);
+  }
+}

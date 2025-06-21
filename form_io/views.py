@@ -318,7 +318,7 @@ def save_project_inputs(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     try:
         data = json.loads(request.body)
-        print(f"Received data for project {project_id}: {data}")
+        print(f"Saving data for project {project_id}: {data}")
 
 
         # Save site_envelope if present
