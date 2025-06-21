@@ -69,6 +69,7 @@ def solve_grasshopper(request):
 
             # 5. Parse and Return Result
             res_data = response.json()
+            print("Response revieved from Rhino Compute")
             return JsonResponse(res_data)
 
         except Exception as e:
@@ -232,7 +233,6 @@ def get_grasshopper_params(request):
             return JsonResponse({"error": response.text}, status=response.status_code)
 
         response_data = response.json()
-        print("response_data")
 
         return JsonResponse(response_data)
     except Exception as e:
@@ -278,7 +278,7 @@ def project_detail(request, project_id):
         "DJ_SITE_ENVELOPE": json.dumps(project.site_envelope),
         "mapbox_token": mapbox_token,
         "DJ_BLOCKS_ENVELOPE": json.dumps(project.blocks_envelope),
-
+        "map_style": project.map_style
     })
 
 @csrf_exempt
@@ -337,6 +337,8 @@ def save_project_inputs(request, project_id):
         if "blocks_envelope" in data:
             project.blocks_envelope = data["blocks_envelope"]
 
+        if "map_style" in data:
+            project.map_style = data["map_style"]
 
         project.save()
         return JsonResponse({"success": True})

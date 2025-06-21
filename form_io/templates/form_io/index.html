@@ -14,6 +14,7 @@
         <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
 
         <script>
+            const selectedStyle = window.mapStyle || 'mapbox/light-v11';
             const PROJECT_ID = {{ project.id }};
             const PROJECT_INPUTS = {{ project_inputs|safe }};
             const DJ_SITE_BOUNDS = {{ DJ_SITE_BOUNDS|safe }};

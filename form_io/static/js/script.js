@@ -223,7 +223,8 @@ function init() {
   const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
   // Set default or user-selected style
-  const selectedStyle = localStorage.getItem('mapStyle') || 'mapbox/light-v11';
+  const selectedStyle = window.mapStyle || 'mapbox/light-v11';
+
 
   map = new mapboxgl.Map({
     container: 'map',
@@ -1698,8 +1699,20 @@ function formatBlockVertices(blocks, envelopePath) {
 
 document.getElementById('styleSwitcher').addEventListener('change', function (e) {
   const newStyle = e.target.value;
-  localStorage.setItem('mapStyle', newStyle);
-  location.reload(); // Reload page to re-run init() with the new style
+
+  // Save to backend
+  fetch(`/api/projects/${PROJECT_ID}/save/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCSRFToken()
+    },
+    body: JSON.stringify({ map_style: newStyle })  // Send new style to backend
+  }).then(() => {
+    location.reload(); // Apply updated style
+  }).catch(err => {
+    console.error('Failed to update map style:', err);
+  });
 });
 
 

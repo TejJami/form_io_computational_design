@@ -14,6 +14,7 @@ class Project(models.Model):
     site_envelope = models.JSONField(default=dict, blank=True) 
     blocks_envelope = models.JSONField(default=dict, blank=True)
 
+    map_style = models.CharField(max_length=100, default='mapbox/light-v11')
     inputs = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
