@@ -211,33 +211,29 @@
         </div>
 
         <!-- PROJECT STAGE INDICATOR - Compact Bottom Center -->
-<div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
-   <div class="flex justify-center gap-4">
-  <button id="prevStageBtn" class="btn btn-xs btn-outline btn-neutral">
-    <iconify-icon icon="ooui:next-rtl"></iconify-icon>
-    </button>
-  <button id="nextStageBtn" class="btn btn-xs btn-outline btn-neutral">
-    <iconify-icon icon="ooui:next-ltr"></iconify-icon>
-</button>
-</div>
-    <div class="steps" id="stage-steps">
-    <li class="step font-sans stage-step step-neutral" data-stage="0">Massing</li>
-    <li class="step font-sans stage-step" data-stage="1">Floorplans</li>
-    <li class="step font-sans stage-step" data-stage="2">Facade</li>
-    <li class="step font-sans stage-step" data-stage="3">Mockup</li>
-    <li class="step font-sans stage-step" data-stage="4">Export</li>
+        <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 bg-white rounded-box shadow px-4 py-2 text-xs">
+        <div class="flex justify-center gap-4">
+        <button id="prevStageBtn" class="btn btn-xs btn-outline btn-neutral">
+            <iconify-icon icon="ooui:next-rtl"></iconify-icon>
+            </button>
+        <button id="nextStageBtn" class="btn btn-xs btn-outline btn-neutral">
+            <iconify-icon icon="ooui:next-ltr"></iconify-icon>
+        </button>
+        </div>
+            <div class="steps" id="stage-steps">
+            <li class="step font-sans stage-step step-neutral" data-stage="0">Massing</li>
+            <li class="step font-sans stage-step" data-stage="1">Floorplans</li>
+            <li class="step font-sans stage-step" data-stage="2">Facade</li>
+            <li class="step font-sans stage-step" data-stage="3">Mockup</li>
+            <li class="step font-sans stage-step" data-stage="4">Export</li>
 
-  </div>
-
-
-</div>
+        </div>
 
 
+        </div>
 
 
-
-
-        <!-- Chat Box using DaisyUI (Compact Version) -->
+        <!-- Chat Box using DaisyUI (Voice + Text Compact Version) -->
         <div id="chat-box" class="fixed bottom-1 right-1 w-[18vw] max-w-[18vw] max-h-[20vh] bg-base-100 shadow-md rounded-lg p-2 z-50 flex flex-col justify-end space-y-1 border border-base-300">
 
             <!-- Chat Messages Scroll Area -->
@@ -245,16 +241,22 @@
                 <!-- Dynamically appended messages will appear here -->
             </div>
 
-            <!-- Input + Send Area -->
+            <!-- Input + Voice + Send Area -->
             <div class="chat-input flex gap-1 items-end">
+                <!-- Voice Input Button -->
+                <button id="voice_prompt" class="btn btn-neutral btn-outline btn-xs shrink-0" title="Voice Input">
+                    <iconify-icon icon="mdi:microphone"></iconify-icon>
+                </button>
+
+                <!-- Text Area -->
                 <textarea id="chatbox" placeholder="Type your prompt here..." class="textarea textarea-bordered textarea-xs resize-none w-full leading-tight" rows="1"></textarea>
-                <button id="send_prompt" class="btn btn-neutral btn-outline btn-xs shrink-0">
+
+                <!-- Send Button -->
+                <button id="send_prompt" class="btn btn-neutral btn-outline btn-xs shrink-0" title="Send Prompt">
                     <iconify-icon icon="mdi:send"></iconify-icon>
                 </button>
             </div>
-
         </div>
-
 
 
     </body>

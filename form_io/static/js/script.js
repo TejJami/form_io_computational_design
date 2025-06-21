@@ -951,91 +951,31 @@ function hideLoader() {
     clearInterval(loaderInterval);
     currentLoaderIndex = 0; // Reset index
 }
-
 function updateInputs(parameters, suppressTrigger = false) {
   Object.keys(parameters).forEach(key => {
     const inputElement = document.getElementById(key);
-    if (inputElement) {
+    if (!inputElement) {
+      console.warn(`[Form IO] Skipping unknown input key from AI: ${key}`);
+      return;
+    }
+
+    // Apply update
+    if (inputElement.type === 'checkbox') {
+      inputElement.checked = Boolean(parameters[key]);
+    } else {
       inputElement.value = parameters[key];
     }
   });
 
-  // Check if envelope_mode was among updated inputs
   if ('envelope_mode' in parameters) {
     syncStageWithEnvelopeMode();
   }
 
   if (!suppressTrigger) {
-    onSliderChange(); // Triggers recompute
+    onSliderChange();
   }
 }
 
-
-
-    document.getElementById('send_prompt').addEventListener('click', async () => {
-        const chatbox = document.getElementById('chatbox');
-        const prompt = chatbox.value.trim();
-        if (!prompt) return; // Prevent empty submissions
-        // Add user prompt as chat-start bubble
-        addChatMessage(prompt, false);
-        // Clear the textarea
-        chatbox.value = '';
-        // Show the loader
-        showLoader();
-        try {
-            const csrfToken = getCSRFToken(); // Ensure you have the CSRF token logic
-            const response = await fetch('/api/openai/chat/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ prompt })
-            });
-            if (response.ok) {
-                const data = await response.json();
-                // Debugging: Check the received data in the console
-                console.log("Response JSON:", data);
-                console.log("Response Reasoning:", data.parameters.reasoning);
-                console.log("Response Parameters:", data.parameters.parameters);
-                // Check and add reasoning from the response as chat-end bubble
-                if (data.parameters.reasoning) {
-                    addChatMessage(data.parameters.reasoning, true);
-                } else {
-                    addChatMessage('Error: No reasoning found in the response.', true);
-                }
-                // Call updateInputs to update form fields with parameters from the response
-                if (data.parameters) {
-                    updateInputs(data.parameters.parameters);
-                }
-            } else {
-                addChatMessage('Error: Unable to process the prompt.', true);
-            }
-        } catch (error) {
-            console.error('Error during fetch:', error);
-            addChatMessage('Error: Unable to reach the server.', true);
-        } finally {
-            // Hide the loader
-            hideLoader();
-        }
-    });
-
-// Function to append a chat message dynamically
-function addChatMessage(message, isResponse = false) {
-    const chatMessages = document.getElementById('chat-messages');
-    // Create chat container
-    const chat = document.createElement('div');
-    chat.className = `chat ${isResponse ? 'chat-start' : 'chat-end'}`;
-    // Create chat bubble
-    const chatBubble = document.createElement('div');
-    chatBubble.className = 'chat-bubble';
-    chatBubble.innerHTML = message;
-    // Append bubble to chat and chat to chat messages container
-    chat.appendChild(chatBubble);
-    chatMessages.appendChild(chat);
-    // Scroll to the bottom of the chat box
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
 
 
 // Preload input values on page load
@@ -1760,6 +1700,10 @@ function updateStageUI() {
   const mode = envelopeModeMap[currentStage];
   envelopeInput.value = mode;
 
+  // Move camera to the initial position based on the mode
+  moveToInitialPosition(mode); // Pass the mode as a parameter to adjust the camera
+
+
   // Trigger recompute/save
   onSliderChange();
   console.log(`[Stage] Now at stage ${currentStage}, envelope_mode: ${mode}`);
@@ -1826,4 +1770,142 @@ function syncStageWithEnvelopeMode() {
     updateStageUI();
     console.log(`[Sync] Synced currentStage to envelope_mode: ${mode} → stage ${matchedIndex}`);
   }
+}
+
+// --- Voice + Text Chatbox Integration Update (Refined) ---
+
+// Avoid multiple mic buttons
+if (!document.getElementById('voice_prompt')) {
+  const micButton = document.createElement('button');
+  micButton.id = 'voice_prompt';
+  micButton.className = 'btn btn-neutral btn-outline btn-xs shrink-0';
+  micButton.innerHTML = '<iconify-icon icon="mdi:microphone"></iconify-icon>';
+  const chatInputContainer = document.querySelector('.chat-input');
+  chatInputContainer.insertBefore(micButton, chatInputContainer.firstChild);
+}
+
+let recognition;
+if ('webkitSpeechRecognition' in window) {
+  recognition = new webkitSpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  const voiceBtn = document.getElementById('voice_prompt');
+  const chatbox = document.getElementById('chatbox');
+
+  voiceBtn.addEventListener('click', () => {
+    recognition.start();
+    voiceBtn.classList.add('btn-active');
+    showToast('voice-on', 'Listening... speak now', 'info', 1500);
+  });
+
+  recognition.onresult = function (event) {
+    const interim = Array.from(event.results)
+      .map(r => r[0].transcript)
+      .join('');
+    chatbox.value = interim;
+  };
+
+  recognition.onend = () => {
+    voiceBtn.classList.remove('btn-active');
+    if (chatbox.value.trim()) document.getElementById('send_prompt').click();
+  };
+
+  recognition.onerror = function () {
+    recognition.stop();
+    showToast('voice-error', 'Voice input failed', 'error', 2000);
+  };
+} else {
+  const voiceBtn = document.getElementById('voice_prompt');
+  voiceBtn.disabled = true;
+  voiceBtn.title = 'Voice input not supported in this browser';
+}
+
+// Enhance chat bubble with hover info for debug/reasoning
+function addChatMessage(message, isResponse = false) {
+  const chatMessages = document.getElementById('chat-messages');
+  const chat = document.createElement('div');
+  chat.className = `chat ${isResponse ? 'chat-start' : 'chat-end'}`;
+
+  const chatBubble = document.createElement('div');
+  chatBubble.className = 'chat-bubble';
+  chatBubble.innerHTML = message;
+  chatBubble.title = isResponse ? 'AI response (hover for text)' : 'User prompt';
+  chat.appendChild(chatBubble);
+  chatMessages.appendChild(chat);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  if (isResponse) speakText(message);
+}
+
+// Text-to-speech
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US';
+  utterance.pitch = 1.0;
+  utterance.rate = 1.0;
+  speechSynthesis.speak(utterance);
+}
+
+// Prompt sender logic
+const sendPromptBtn = document.getElementById('send_prompt');
+sendPromptBtn.addEventListener('click', async () => {
+  const chatbox = document.getElementById('chatbox');
+  const prompt = chatbox.value.trim();
+  if (!prompt) return;
+  addChatMessage(prompt, false);
+  chatbox.value = '';
+  showLoader();
+
+  try {
+    const csrfToken = getCSRFToken();
+    const response = await fetch('/api/openai/chat/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify({ prompt })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const reasoning = data.parameters.reasoning || 'No reasoning returned';
+      const updates = data.parameters.parameters || {};
+
+      console.log('[AI RESPONSE]', reasoning);
+      console.log('[AI PARAMETER UPDATES]', updates);
+
+      addChatMessage(reasoning, true);
+      updateInputs(updates);
+    } else {
+      addChatMessage('Error: Unable to process prompt', true);
+    }
+  } catch (e) {
+    console.error('Chat error:', e);
+    addChatMessage('Error: Network or server issue', true);
+  } finally {
+    hideLoader();
+  }
+});
+
+// Function to move the camera to the initial position based on the mode
+function moveToInitialPosition(mode) {
+  const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
+  
+  // Set zoom and pitch based on the mode
+  const zoom = mode === 0 || mode === 2 ? 18 : 18;  // Adjust zoom for mode 0 and 2 (tiled/grid view)
+  const pitch = mode === 0 || mode === 2 ? 45 : 0;  // Set pitch to 45 for mode 0 and 2 (inclined view)
+  const bearing = 0;  // Set bearing to 0 for no rotation (you can adjust if needed)
+
+  map.flyTo({
+    center: siteBounds.center,
+    zoom: zoom,    // Use different zoom levels for different modes
+    pitch: pitch,  // Apply different pitch for inclined view (45) or top-down view (0)
+    bearing: bearing,
+    essential: true,  // Ensures the camera movement is essential, causing a smooth transition
+    duration: 2000   // Transition time in milliseconds
+  });
 }

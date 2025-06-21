@@ -25,6 +25,26 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_3")
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Field groups mapped to agent types
+AGENT_INPUT_GROUPS = {
+    "building": [
+        "block",  # match any key starting with 'block'
+    ],
+    "envelope": [
+        "envelope_"
+    ],
+    "facade": [
+        "facade_"
+    ]
+}
+
+# Prompt templates per agent
+AGENT_PROMPT_GUIDANCE = {
+    "building": "You are a building configuration assistant. Only respond with building-related inputs, like block height, units, floor count, corridor width, etc.",
+    "envelope": "You are an envelope design assistant. You only deal with envelope parameters like setback, mode, vertices, etc.",
+    "facade": "You are a facade design assistant. Handle only facade inputs like balcony types, widths, opening ratios, etc."
+}
+
 
 @csrf_exempt
 def solve_grasshopper(request):
@@ -78,126 +98,157 @@ def solve_grasshopper(request):
 
     return JsonResponse({"success": False, "error": "Only POST method allowed."})
 
+import re
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import Project  # Assuming you're using this
+from openai import OpenAI
+
+# Converts camelCase or PascalCase to snake_case (if needed elsewhere)
+def normalize_key(key):
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+
+# Cleans values like "8 m" or "10m" → 8.0
+def clean_value(val):
+    if isinstance(val, str) and 'm' in val:
+        try:
+            return float(val.replace('m', '').strip())
+        except ValueError:
+            return val
+    return val
+
+# Define exactly allowed keys from your UI model (strict matching)
+VALID_INPUT_KEYS = {
+    "block1_NoOfUnits", "block1_corridor", "block1_floor_height", "block1_no_of_floors", "block1_width",
+    "block2_NoOfUnits", "block2_corridor", "block2_floor_height", "block2_no_of_floors", "block2_type", "block2_width",
+    "block3_NoOfUnits", "block3_corridor", "block3_floor_height", "block3_no_of_floors", "block3_type", "block3_width",
+    "block4_NoOfUnits", "block4_floor_height", "block4_no_of_floors", "block4_type", "block4_width",
+    "block5_NoOfUnits", "block5_floor_height", "block5_no_of_floors", "block5_type", "block5_width",
+    "envelope_block_vertices", "envelope_mode", "envelope_setback", "envelope_vertices",
+    "facade_block1_balconywidth", "facade_block1_balconytype",
+    "facade_block2_balconywidth", "facade_block2_balconytype"
+}
+
 @csrf_exempt
 def chat_with_openai(request):
-    print("Received request for OpenAI call")
-    if request.method == 'POST':
-        try:
-            # Parse the request body for the prompt
-            data = json.loads(request.body)
-            prompt = data.get('prompt', '')
+    if request.method != 'POST':
+        return JsonResponse({"error": "Invalid request method"}, status=400)
 
-            print(f"Received prompt: {prompt}")
-
-            if not prompt:
-                return JsonResponse({"error": "No prompt provided"}, status=400)
-
-            # Define inputs, their descriptions, ranges, and an example response
-            inputs_description = {
-                "podium_length": "Defines the length of the podium, which is typically the base or foundation on which the main structure (e.g., towers or buildings) is built. This parameter determines how far the podium extends along one axis. Should always be more than 20000mm.",
-                "podium_width": "Specifies the width of the podium, determining its dimension along the perpendicular axis to the length. Together with podium_length, this creates the footprint of the podium. Should always be more than 20000mm.",
-                "podium_no_of_floors": "Sets the number of floors or levels in the podium. This parameter controls the vertical extent of the podium structure. Output is always an integer.",
-                "floor_height": "Determines the height of each floor in the building. This is a crucial parameter for calculating the total height of the structure and maintaining proportions.",
-                "building_type": "Indicates the type of building being designed. This must be an integer from 0 to 5, where each number represents a specific type: 0 for single tower, 1 for two towers, 2 for courtyard, 3 for staggered, 4 for L-shaped, and 5 for H-shaped. This parameter may influence other design aspects such as floor layout and building regulations.",
-                "tower_num_floors": "Specifies the number of floors in the tower portion of the model, controlling its vertical scale. This is separate from the podium and applies to the taller sections of the design.",
-                "courtyard_offset": "Controls the distance or spacing for the courtyard area, typically affecting how much open space is left between the building and the inner courtyard. This is only applicable if the building type is 2 (courtyard).",
-                "staggered_offset": "Defines the offset distance for staggered elements of the design. This parameter is often used for creating a stepped or terraced effect in the facade or building form. This is applicable only if the building type is 3 (staggered).",
-                "polyline_offset": "Specifies the separation or spacing between two towers in the design. This ensures appropriate distances are maintained for structural, aesthetic, or functional reasons, such as light, air circulation, and privacy. This is applicable only when the building type is 1 (two towers)."
-            }
-
-
-            input_ranges = {
-                "podium_length": [10000, 200000],
-                "podium_width": [10000, 100000],
-                "podium_no_of_floors": [1, 20],
-                "floor_height": [2000, 5000],
-                "building_type": [0, 5],
-                "tower_num_floors": [1, 50],
-                "courtyard_offset": [0, 10000],
-                "staggered_offset": [0, 3000],
-                "polyline_offset": [0, 20000]
-            }
-
-            example_response = {
-            "parameters": {
-                "courtyard_offset": "1090.88", 
-                "podium_lenght": "47025.3210000", 
-                "floor_height": "4941.268", 
-                "podium_no_of_floors": "12.418", 
-                "tower_num_floors": "8.536", 
-                "staggered_offset": "7862.917", 
-                "building_type": "H-shaped ]", 
-                "two_tower_offset": "0.22", 
-                "podium_width": "37701.2450000", 
-                "polyline_offset": "8537.49400000"
-            }, 
-            "reasoning": "Explain why you made these parameter choices"
-            }
-
-
-            # Combine all details into the prompt
-            detailed_prompt = (
-                "You are an architect specializing in housing projects. Based on the given inputs, "
-                "select parameter values for a project. Here are the details:\n\n"
-                "Inputs and Descriptions:\n" +
-                "\n".join([f"- {key}: {desc}" for key, desc in inputs_description.items()]) +
-                "\n\nInput Ranges:\n" +
-                "\n".join([f"- {key}: {value}" for key, value in input_ranges.items()]) +
-                "\n\nExample JSON Response:\n" +
-                json.dumps(example_response, indent=4) +
-                f"\n\nNow, based on the following prompt, provide parameter values as a JSON response and always include all the values that are there in the example json, if not applicable then it should be 0:\n{prompt}"
-            )
-
-            # Call the OpenAI API
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert architect specialized in housing project configurations.Always reply in JSON format as in the example json. Do not include any other information in the response."},
-                    {"role": "user", "content": detailed_prompt},
-                ],
-                max_tokens=800
-            )
-            print("OpenAI API call succeeded")
-            print(f"Raw OpenAI Response: {response}")
-
-            # Extract the content and parse as JSON if applicable
-            gpt_output = response.choices[0].message.content
-            print(f"gpt output Response: {gpt_output}")
-
-            # Use the parsing helper function
-            parameters = parse_openai_response(gpt_output)
-
-            # Handle errors in parsing
-            if "error" in parameters:
-                return JsonResponse(parameters, status=500)
-
-            # Send the extracted parameters to the frontend
-            return JsonResponse({"parameters": parameters})
-            
-        except Exception as e:
-            print(f"Error while calling OpenAI API: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
-
-    return JsonResponse({"error": "Invalid request method"}, status=400)
-
-@csrf_exempt
-def parse_openai_response(raw_response):
-    """
-    Parses the OpenAI JSON response to extract parameters and reasoning.
-    """
     try:
-        # Parse the JSON string
-        parsed_response = json.loads(raw_response)
+        body = json.loads(request.body)
+        prompt = body.get("prompt", "").strip()
+        if not prompt:
+            return JsonResponse({"error": "Prompt cannot be empty."}, status=400)
 
-        # Extract "parameters" and "reasoning"
-        parameters = parsed_response.get("parameters", {})
-        reasoning = parsed_response.get("reasoning", "")
+        agent_type = route_prompt_to_agent(prompt)
+        if not agent_type:
+            return JsonResponse({"error": "Unable to classify prompt to an agent."}, status=400)
 
-        # Return both as a dictionary
-        return {"parameters": parameters, "reasoning": reasoning}
-    except json.JSONDecodeError as e:
-        print(f"Error parsing OpenAI JSON response: {e}")
-        return {"error": "Invalid JSON format in OpenAI response."}
+        valid_keys = sorted(list(VALID_INPUT_KEYS))
+
+        # STEP 1 — Ask GPT to pick the best-matching key
+        match_prompt = f"""
+You are an assistant that maps user instructions to known architecture input keys.
+
+Choose one exact parameter from the list below that best fits this user prompt:
+{prompt}
+
+Use ONLY this list of parameter names:
+{valid_keys}
+
+Respond like:
+{{
+  "match": "block2_width"
+}}
+"""
+
+        match_response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You respond only with JSON and only use known parameter names."},
+                {"role": "user", "content": match_prompt}
+            ],
+            max_tokens=100
+        )
+        match_content = match_response.choices[0].message.content
+        try:
+            matched_key = json.loads(match_content).get("match")
+        except Exception:
+            return JsonResponse({"error": "Unable to extract match from OpenAI response."}, status=500)
+
+        if matched_key not in VALID_INPUT_KEYS:
+            return JsonResponse({"error": f"Matched key '{matched_key}' is not a valid parameter."}, status=400)
+
+        # STEP 2 — Now ask GPT to change that one key based on the prompt
+        update_prompt = f"""
+Update the following parameter based on this prompt:
+
+Prompt: {prompt}
+Parameter to update: {matched_key}
+
+Respond in this format:
+{{
+  "reasoning": "explains why the change was made",
+  "parameters": {{
+    "{matched_key}": new_value
+  }}
+}}
+"""
+
+        update_response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an AI assistant for architecture parameters. Return only valid JSON."},
+                {"role": "user", "content": update_prompt}
+            ],
+            max_tokens=300
+        )
+
+        update_content = update_response.choices[0].message.content
+        parsed = parse_openai_response(update_content)
+
+        if "error" in parsed:
+            return JsonResponse(parsed, status=500)
+
+        # Filter only exact keys
+        updates = {
+            k: clean_value(v)
+            for k, v in parsed["parameters"].items()
+            if k in VALID_INPUT_KEYS
+        }
+
+        return JsonResponse({
+            "parameters": {
+                "parameters": updates,
+                "reasoning": parsed.get("reasoning", "")
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+def parse_openai_response(raw):
+    try:
+        data = json.loads(raw)
+        return {
+            "parameters": data.get("parameters", {}),
+            "reasoning": data.get("reasoning", "")
+        }
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON returned from OpenAI."}
+
+def route_prompt_to_agent(prompt):
+    lower = prompt.lower()
+    print(f"[DEBUG] Routing prompt: {lower}")
+    if any(term in lower for term in ["block", "units", "tower", "floor"]):
+        return "building"
+    if any(term in lower for term in ["setback", "envelope", "site"]):
+        return "envelope"
+    if any(term in lower for term in ["facade", "balcony", "shading"]):
+        return "facade"
+    return None
+
 
 @csrf_exempt
 def get_grasshopper_params(request):
