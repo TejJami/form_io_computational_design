@@ -25,7 +25,7 @@ let draw
 let isEnvelopeSelectable = false;
 let isBlockSelectable = false;
 let currentDrawRole = null; // "site", "Envelope", "block", etc.
-
+let isInitializing  = true; // Flag to prevent premature compute calls
 
 init()
 
@@ -133,7 +133,7 @@ function meshToThreejs(mesh) {
     vertexColors: true,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.6
+    opacity: 1,
   });
 
   return new THREE.Mesh(geometry, material);
@@ -222,9 +222,12 @@ function init() {
   const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
   const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
+  // Set default or user-selected style
+  const selectedStyle = localStorage.getItem('mapStyle') || 'mapbox/light-v11';
+
   map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/light-v11',
+    style: 'mapbox://styles/' + selectedStyle,
     center: siteBounds.center,
     zoom: 16,
     pitch: 60,
@@ -706,7 +709,7 @@ const customLayer = {
     })
     threeRenderer.autoClear = false
 
-    // ✅ Wait for input UI to be ready before computing
+    // Wait for input UI to be ready before computing
     await fetchGrasshopperInputs(data.definition);
     registerInputListeners(); // Attach events to newly created input elements
     preloadInputs(PROJECT_INPUTS); // Optional: load saved input values if available
@@ -932,17 +935,19 @@ function hideLoader() {
     currentLoaderIndex = 0; // Reset index
 }
 
-function updateInputs(parameters) {
+function updateInputs(parameters, suppressTrigger = false) {
   Object.keys(parameters).forEach(key => {
     const inputElement = document.getElementById(key);
     if (inputElement) {
       inputElement.value = parameters[key];
     }
-
   });
 
-  onSliderChange(); // Triggers recompute
+  if (!suppressTrigger) {
+    onSliderChange(); // Triggers recompute
+  }
 }
+
 
 
     document.getElementById('send_prompt').addEventListener('click', async () => {
@@ -1027,6 +1032,7 @@ function preloadInputs(savedInputs) {
   });
 
   console.log('[Form IO] Preloaded saved inputs for project:', PROJECT_ID);
+  isInitializing = false; // ✅ move this here
 }
 
 async function saveInputsToProject(inputs) {
@@ -1049,11 +1055,17 @@ async function saveInputsToProject(inputs) {
 
 
 function onSliderChange() {
+  if (isInitializing) {
+    console.log('[Form IO] onSliderChange() skipped during init');
+    return;
+  }
+
   console.log('[Form IO] Slider/input changed – recomputing...');
   compute();
   saveInputsToProject(getInputs());
   console.log('[Form IO] Inputs saved after slider change');
 }
+
 
 // Dynamically attach events to all inputs in overlay
 function registerInputListeners() {
@@ -1244,17 +1256,14 @@ function populateInputsUI(inputs) {
 }
 
 
+// document.addEventListener('DOMContentLoaded', async () => {
+//   preloadInputs(PROJECT_INPUTS);  
+//   registerInputListeners();       
 
+//   // Wait for dynamic input UI to be built
+//   await fetchGrasshopperInputs(data.definition);
 
-
-document.addEventListener('DOMContentLoaded', async () => {
-  preloadInputs(PROJECT_INPUTS);  
-  registerInputListeners();       
-
-  // Wait for dynamic input UI to be built
-  await fetchGrasshopperInputs(data.definition);
-
-});
+// });
 
 let labelMarkers = [];
 
@@ -1688,125 +1697,11 @@ function formatBlockVertices(blocks, envelopePath) {
 }
 
 document.getElementById('styleSwitcher').addEventListener('change', function (e) {
-  const selectedStyle = e.target.value;
-  if (!map) return;
-
-  // Apply new Mapbox style
-  map.setStyle('mapbox://styles/' + selectedStyle);
-
-  map.once('style.load', () => {
-    console.log('[StyleSwitcher] Style loaded:', selectedStyle);
-
-    // Re-add drawing control if missing
-    if (!map._controls.includes(draw)) {
-      map.addControl(draw);
-    }
-
-    // Re-add custom 3D Rhino layer
-    if (!map.getLayer('rhino-layer')) {
-      try {
-        map.addLayer(customLayer);
-      } catch (err) {
-        console.warn('[StyleSwitcher] Failed to add customLayer:', err);
-      }
-    }
-
-    // Re-add GeoJSON source/layer for site
-    if (DJ_SITE_BOUNDS?.features?.length) {
-      if (!map.getSource('site')) {
-        map.addSource('site', {
-          type: 'geojson',
-          data: DJ_SITE_BOUNDS
-        });
-      }
-
-      if (!map.getLayer('site-boundary')) {
-        map.addLayer({
-          id: 'site-boundary',
-          type: 'fill',
-          source: 'site',
-          paint: {
-            'fill-color': '#3b82f6',
-            'fill-opacity': 0
-          }
-        });
-      }
-    }
-
-    // Re-add GeoJSON source/layer for Envelope
-    const envelopeGeo = siteenvelopeToGeoJSON(DJ_SITE_ENVELOPE);
-    if (envelopeGeo) {
-      if (!map.getSource('Envelope')) {
-        map.addSource('Envelope', {
-          type: 'geojson',
-          data: envelopeGeo
-        });
-      }
-
-      if (!map.getLayer('Envelope-boundary')) {
-        map.addLayer({
-          id: 'Envelope-boundary',
-          type: 'fill',
-          source: 'Envelope',
-          paint: {
-            'fill-color': '#f97316',
-            'fill-opacity': 0
-          }
-        });
-      }
-    }
-
-    // Re-add 3D buildings layer
-    if (!map.getLayer('3d-buildings')) {
-      map.addLayer({
-        id: '3d-buildings',
-        source: 'composite',
-        'source-layer': 'building',
-        filter: ['==', 'extrude', 'true'],
-        type: 'fill-extrusion',
-        minzoom: 15,
-        paint: {
-          'fill-extrusion-color': '#aaa',
-          'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-base': ['get', 'min_height'],
-          'fill-extrusion-opacity': 1
-        }
-      });
-    }
-
-    // Restore draw features (blocks, Envelope, site, etc.)
-    try {
-      const allFeatures = draw.getAll();
-      draw.set(allFeatures);
-    } catch (e) {
-      console.warn('[StyleSwitcher] Failed to restore draw features:', e);
-    }
-
-    // Restore envelope dimension labels
-    if (DJ_SITE_ENVELOPE?.points?.length) {
-      const geo = siteenvelopeToGeoJSON(DJ_SITE_ENVELOPE);
-      if (geo) showSiteEvnelopeDimensions(geo.geometry);
-    }
-
-    // Hide POI labels but keep streets and buildings
-    map.getStyle().layers.forEach(layer => {
-      if (
-        layer.type === 'symbol' &&
-        layer.layout?.['text-field'] &&
-        (
-          layer.id.includes('poi') ||
-          layer.id.includes('transit') ||
-          layer.id.includes('airport') ||
-          layer.id.includes('park')
-        )
-      ) {
-        map.setLayoutProperty(layer.id, 'visibility', 'none');
-      }
-    });
-
-    console.log('[StyleSwitcher] Custom layers, sources, and features restored safely.');
-  });
+  const newStyle = e.target.value;
+  localStorage.setItem('mapStyle', newStyle);
+  location.reload(); // Reload page to re-run init() with the new style
 });
+
 
 /**
  * Maps stage index to envelope_mode:
