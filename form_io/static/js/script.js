@@ -26,6 +26,22 @@ let isEnvelopeSelectable = false;
 let isBlockSelectable = false;
 let currentDrawRole = null; // "site", "Envelope", "block", etc.
 let isInitializing  = true; // Flag to prevent premature compute calls
+let sliderTimeout;
+
+function onSliderChangeDebounced() {
+  if (isInitializing) {
+    console.log('[Form IO] onSliderChange() skipped during init');
+    return;
+  }
+
+  clearTimeout(sliderTimeout); // Clear previous timer
+  sliderTimeout = setTimeout(() => {
+    console.log('[Form IO] Debounced slider/input changed – recomputing...');
+    compute();
+    saveInputsToProject(getInputs());
+  }, 1000); // Delay in milliseconds
+}
+
 
 init()
 
@@ -1085,16 +1101,20 @@ function registerInputListeners() {
 
   selectors.forEach(selector => {
     document.querySelectorAll(`${selector} input, ${selector} textarea, ${selector} select`).forEach(input => {
-      input.removeEventListener('input', onSliderChange); // avoid duplicates
-      input.addEventListener('input', onSliderChange, false);
-      input.addEventListener('change', onSliderChange, false);
-      input.addEventListener('mouseup', onSliderChange, false);
-      input.addEventListener('touchend', onSliderChange, false);
+      // Skip collapsible toggles (checkboxes controlling <details> or collapsible UI)
+      if (input.type === 'checkbox' && input.closest('.collapse')) return;
+
+      input.removeEventListener('input', onSliderChangeDebounced); // avoid duplicates
+      input.addEventListener('input', onSliderChangeDebounced, false);
+      input.addEventListener('change', onSliderChangeDebounced, false);
+      input.addEventListener('mouseup', onSliderChangeDebounced, false);
+      input.addEventListener('touchend', onSliderChangeDebounced, false);
     });
   });
 
   console.log('[Form IO] Input listeners bound for all tool panels.');
 }
+
 
 
 
@@ -1715,12 +1735,6 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
 
 
 
-/**
- * Maps stage index to envelope_mode:
- * 0 → 0 (Massing)
- * 1 → 1 (Floorplans)
- * 2+ → 2 (Facade, Mockup, Export)
- */
 const envelopeModeMap = [0, 1, 2, 2, 2];
 
 /**
