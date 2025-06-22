@@ -223,9 +223,30 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
     map.setStyle('mapbox://styles/' + selectedStyle);
 
     // Re-add controls after style change
-    map.once('styledata', () => {
-      map.addControl(draw);
-    });
+map.once('styledata', () => {
+  map.addControl(draw);
+
+  map.getStyle().layers.forEach(layer => {
+    const id = layer.id;
+    const isSymbol = layer.type === 'symbol';
+
+    // Keep only road and building name labels
+    const isAllowed =
+      id.includes('road-label') ||
+      id.includes('building-name') ||
+      id.includes('road-label-small') ||
+      id.includes('road-label-medium') ||
+      id.includes('road-label-large');
+
+    if (isSymbol && !isAllowed) {
+      try {
+        map.setLayoutProperty(id, 'visibility', 'none');
+      } catch (e) {
+        console.warn('Unable to hide layer', id);
+      }
+    }
+  });
+});
   }
 });
 

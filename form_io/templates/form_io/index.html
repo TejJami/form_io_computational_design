@@ -234,17 +234,17 @@
 
 
         <!-- Chat Box using DaisyUI (Voice + Text Compact Version) -->
-        <div id="chat-box" class="fixed bottom-1 right-1 w-[18vw] max-w-[18vw] max-h-[20vh] bg-base-100 shadow-md rounded-lg p-2 z-50 flex flex-col justify-end space-y-1 border border-base-300">
+        <div id="chat-box" class="fixed bottom-1 right-1  w-[25vw]  bg-none rounded-lg z-50 flex flex-col justify-end space-y-1">
 
             <!-- Chat Messages Scroll Area -->
-            <div id="chat-messages" class="overflow-y-auto pr-1 flex-grow max-h-[100px] space-y-1 text-sm">
+            <div id="chat-messages" class="overflow-y-auto pr-1 flex-grow max-h-[100px] space-y-1 text-xs bg-none">
                 <!-- Dynamically appended messages will appear here -->
             </div>
 
             <!-- Input + Voice + Send Area -->
-            <div class="chat-input flex gap-1 items-end">
+            <div class="chat-input flex gap-1 items-end bg-base-100 p-4 rounded-lg">
                 <!-- Voice Input Button -->
-                <button id="voice_prompt" class="btn btn-neutral btn-outline btn-xs shrink-0" title="Voice Input">
+                <button id="voice_prompt" class="btn btn-neutral btn-outline btn-md shrink-0" title="Voice Input">
                     <iconify-icon icon="mdi:microphone"></iconify-icon>
                 </button>
 

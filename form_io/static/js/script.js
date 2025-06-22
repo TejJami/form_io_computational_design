@@ -149,7 +149,7 @@ function meshToThreejs(mesh) {
     vertexColors: true,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 1,
+    opacity: 0.9,
   });
 
   return new THREE.Mesh(geometry, material);
@@ -236,13 +236,12 @@ let EnvelopePolygonId = null;
 let siteLabelMarkers = [];
 let EnvelopeLabelMarkers = [];
 
-function init() {
+function init(styleOverride = null) {
   const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
   const paddedBounds = getPaddedBounds(siteBounds.bounds);
 
   // Set default or user-selected style
-  const selectedStyle = window.mapStyle || 'mapbox/light-v11';
-
+  const selectedStyle = styleOverride || window.mapStyle || 'mapbox/light-v11';
 
   map = new mapboxgl.Map({
     container: 'map',
@@ -391,7 +390,6 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
   map.on('load', () => {
 
 
-
     // Site layer and polygon
     if (DJ_SITE_BOUNDS?.features?.length) {
       const siteFeature = DJ_SITE_BOUNDS.features[0];
@@ -412,8 +410,6 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
         } 
       });
 
-      // const addedSite = draw.add(siteFeature);
-      // sitePolygonId = addedSite[0];
     }
 
     // Envelope layer and polygon
@@ -442,17 +438,19 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
       showSiteEvnelopeDimensions(EnvelopeFeature.geometry);
     }
 
-      if (draw && DJ_BLOCKS_ENVELOPE && Array.isArray(DJ_BLOCKS_ENVELOPE)) {
-      DJ_BLOCKS_ENVELOPE.forEach(feature => {
-    draw.add({
-      type: "Feature",
-      geometry: feature.geometry,
-      properties: feature.properties || { role: "block" }
-    });
-  });
-  } else {
-    console.warn('[Form IO] draw not ready');
-  }
+    if (draw && DJ_BLOCKS_ENVELOPE && Array.isArray(DJ_BLOCKS_ENVELOPE)) {
+      setTimeout(() => {
+        DJ_BLOCKS_ENVELOPE.forEach(feature => {
+          draw.add({
+            type: "Feature",
+            geometry: feature.geometry,
+            properties: feature.properties || { role: "block" }
+          });
+        });
+      }, 0); // delay ensures draw is initialized
+    } else {
+      console.warn('[Form IO] draw not ready (in map load)');
+    }
 
   
     // 3D Envelopes
@@ -473,10 +471,22 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
 
     // Hide street labels
     map.getStyle().layers.forEach(layer => {
-      if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
-        map.setLayoutProperty(layer.id, 'visibility', 'none');
+      const id = layer.id;
+      const isSymbol = layer.type === 'symbol';
+      const layout = layer.layout;
+
+      const isAllowed =
+        id.includes('road-label') ||
+        id.includes('building-name') ||
+        id.includes('road-label-small') ||
+        id.includes('road-label-medium') ||
+        id.includes('road-label-large');
+
+      if (isSymbol && layout && layout['text-field'] && !isAllowed) {
+        map.setLayoutProperty(id, 'visibility', 'none');
       }
     });
+
 
     map.fitBounds(siteBounds.bounds, { padding: 0, duration: 0 });
     map.addLayer(customLayer);
@@ -1657,8 +1667,8 @@ function formatBlockVertices(blocks, envelopePath) {
 
 document.getElementById('styleSwitcher').addEventListener('change', function (e) {
   const newStyle = e.target.value;
+  console.log('Map style changed to:', newStyle);
 
-  // Save the selection to the backend
   fetch(`/api/projects/${PROJECT_ID}/save/`, {
     method: 'POST',
     headers: {
@@ -1667,14 +1677,14 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
     },
     body: JSON.stringify({ map_style: newStyle })
   }).then(() => {
-    if (map && map.setStyle) {
-      map.setStyle(`mapbox://styles/${newStyle}`);  // Change style dynamically
+    if (map) {
+      map.remove(); // Cleanly destroy old map
     }
+    init(newStyle); // Re-initialize with new style
   }).catch(err => {
     console.error('Failed to update map style:', err);
   });
 });
-
 
 
 const envelopeModeMap = [0, 1, 2, 2, 2];
@@ -1703,7 +1713,7 @@ function updateStageUI() {
   envelopeInput.value = mode;
 
   // Move camera to the initial position based on the mode
-  moveToInitialPosition(mode); // Pass the mode as a parameter to adjust the camera
+  moveToInitialPosition(mode, currentStage); // Pass the mode as a parameter to adjust the camera
 
 
   // Trigger recompute/save
@@ -1894,20 +1904,42 @@ sendPromptBtn.addEventListener('click', async () => {
 });
 
 // Function to move the camera to the initial position based on the mode
-function moveToInitialPosition(mode) {
+function moveToInitialPosition(mode, stage = null) {
   const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
-  
-  // Set zoom and pitch based on the mode
-  const zoom = mode === 0 || mode === 2 ? 18 : 18;  // Adjust zoom for mode 0 and 2 (tiled/grid view)
-  const pitch = mode === 0 || mode === 2 ? 45 : 0;  // Set pitch to 45 for mode 0 and 2 (inclined view)
-  const bearing = 0;  // Set bearing to 0 for no rotation (you can adjust if needed)
+
+  // Adjust zoom, pitch, and bearing dynamically
+  let zoom = 18;
+  let pitch = 45;
+  let bearing = 0;
+
+  if (mode === 0 || mode === 2) {
+    pitch = 45;
+
+    // Custom variations for steps 3, 4, 5 (mode === 2)
+    if (stage === 3) {
+      bearing = -30;
+      zoom = 17.5;
+    } else if (stage === 4) {
+      bearing = 45;
+      zoom = 18.2;
+    } else if (stage === 5) {
+      bearing = -90;
+      zoom = 18.5;
+    }
+  } else {
+    pitch = 0;
+    zoom = 18;
+    bearing = 0;
+  }
 
   map.flyTo({
     center: siteBounds.center,
-    zoom: zoom,    // Use different zoom levels for different modes
-    pitch: pitch,  // Apply different pitch for inclined view (45) or top-down view (0)
+    zoom: zoom,
+    pitch: pitch,
     bearing: bearing,
-    essential: true,  // Ensures the camera movement is essential, causing a smooth transition
-    duration: 3000   // Transition time in milliseconds
+    essential: true,
+    duration: 4000
   });
 }
+
+
