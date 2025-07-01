@@ -28,6 +28,14 @@ let currentDrawRole = null; // "site", "Envelope", "block", etc.
 let isInitializing  = true; // Flag to prevent premature compute calls
 let sliderTimeout;
 
+const envelopeOpacityMap = {
+  0: 0.5,  // Massing
+  1: 0.8,  // Floorplans
+  2: 0.99,  // Facade / Mockup / Export
+  3: 0.6   // Structure
+};
+
+
 function onSliderChangeDebounced() {
   if (isInitializing) {
     console.log('[Form IO] onSliderChange() skipped during init');
@@ -143,18 +151,19 @@ function getMercatorUnitsPerMeterAtOrigin(originLngLat) {
 function meshToThreejs(mesh) {
   const loader = new THREE.BufferGeometryLoader();
   const geometry = loader.parse(mesh.toThreejsJSON());
-  
+
+  const currentMode = envelopeModeMap[currentStage];
+  const opacity = envelopeOpacityMap[currentMode] ?? 1.0;
 
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.9,
+    transparent: opacity < 1.0,
+    opacity: opacity
   });
 
   return new THREE.Mesh(geometry, material);
 }
-
 
 function replaceCurrentMesh(mesh, type) {
   if (type === 'meshb64' && meshb64Mesh) {
@@ -465,7 +474,7 @@ document.getElementById('btn-bldg-delete').addEventListener('click', () => {
         'fill-extrusion-color': '#aaa',
         'fill-extrusion-height': ['get', 'height'],
         'fill-extrusion-base': ['get', 'min_height'],
-        'fill-extrusion-opacity': 1
+
       }
     });
 
@@ -979,9 +988,6 @@ function updateInputs(parameters, suppressTrigger = false) {
     }
   });
 
-  if ('envelope_mode' in parameters) {
-    syncStageWithEnvelopeMode();
-  }
 
   if (!suppressTrigger) {
     onSliderChange();
@@ -1419,17 +1425,6 @@ function removeToast(id) {
   if (toast) toast.remove();
 }
 
-async function refreshProjectPolyline() {
-  try {
-    const res = await fetch(`/api/projects/${PROJECT_ID}/get_polyline/`);
-    if (!res.ok) throw new Error('Fetch failed');
-    const json = await res.json();
-    DJ_SITE_ENVELOPE = json.DJ_SITE_ENVELOPE;
-    console.log('[Form IO] DJ_SITE_ENVELOPE refreshed from backend');
-  } catch (e) {
-    console.error('Failed to refresh polyline:', e);
-  }
-}
 
 async function refreshProjectBlocksAndEnvelope() {
   try {
@@ -1687,7 +1682,7 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
 });
 
 
-const envelopeModeMap = [0, 1, 2, 2, 2];
+const envelopeModeMap = [0, 1, 2, 3, 2, 2];
 
 /**
  * Current stage index tracker (0-4)
@@ -1700,26 +1695,38 @@ let currentStage = 0;
 function updateStageUI() {
   const steps = document.querySelectorAll('.stage-step');
   const envelopeInput = document.getElementById('envelope_mode');
-  console.log(envelopeInput, steps);
+  console.log('[Update UI] envelope_mode value:', envelopeInput.value);
+  console.log('[Update UI] Steps:', steps);
+
   if (!envelopeInput || steps.length === 0) return;
+
+  // Make sure currentStage is within bounds
+  currentStage = Math.min(currentStage, steps.length - 1); // This ensures we don't go beyond available steps
+
+  console.log('[Update UI] currentStage:', currentStage);
 
   // Update step highlight
   steps.forEach((step, index) => {
-    step.classList.toggle('step-neutral', index <= currentStage);
+    step.classList.toggle('step-neutral', index <= currentStage); // Update step highlighting
   });
 
   // Set and apply mapped envelope_mode
   const mode = envelopeModeMap[currentStage];
-  envelopeInput.value = mode;
+  envelopeInput.value = mode; // Set value for the envelope_mode input
 
   // Move camera to the initial position based on the mode
-  moveToInitialPosition(mode, currentStage); // Pass the mode as a parameter to adjust the camera
+  moveToInitialPosition(mode, currentStage); // Adjust camera based on mode
 
+  // Set opacity for the current mode
+  const opacity = envelopeOpacityMap[mode] ?? 1.0;
+  setCustomLayerOpacity(opacity);
 
   // Trigger recompute/save
   onSliderChange();
   console.log(`[Stage] Now at stage ${currentStage}, envelope_mode: ${mode}`);
 }
+
+
 
 /**
  * Initializes step navigation buttons
@@ -1754,35 +1761,29 @@ function setupStageNavigation() {
 function initializeStageFromInput() {
   console.log('[Form IO] Initializing stage from envelope_mode input...');
   const envelopeInput = document.getElementById('envelope_mode');
+  console.log('[Form IO] envelope_mode input:', envelopeInput.length, envelopeInput.value);
   if (!envelopeInput) return;
 
   const currentMode = parseInt(envelopeInput.value);
+  console.log('[Form IO] envelope_mode value:', currentMode);  // Check the value here
+
   if (isNaN(currentMode)) {
     console.warn('[Form IO] Invalid envelope_mode input value.');
     return;
   }
 
-  // Find the first stage whose mapped mode matches the current envelope_mode
-  const matchedIndex = envelopeModeMap.findIndex(mode => mode === currentMode);
-  currentStage = matchedIndex !== -1 ? matchedIndex : 0;
+  if (currentMode === 0) {
+    currentStage = 0; // Force it to be 0 if the envelope_mode is 0
+  } else {
+    const matchedIndex = envelopeModeMap.findIndex(mode => mode === currentMode);
+    currentStage = matchedIndex !== -1 ? matchedIndex : 0;
+  }
+
+  console.log('[Form IO] After setting currentStage:', currentStage);
 
   updateStageUI();
 }
 
-function syncStageWithEnvelopeMode() {
-  const envelopeInput = document.getElementById('envelope_mode');
-  if (!envelopeInput) return;
-
-  const mode = parseInt(envelopeInput.value);
-  if (isNaN(mode)) return;
-
-  const matchedIndex = envelopeModeMap.findIndex(m => m === mode);
-  if (matchedIndex !== -1 && matchedIndex !== currentStage) {
-    currentStage = matchedIndex;
-    updateStageUI();
-    console.log(`[Sync] Synced currentStage to envelope_mode: ${mode} → stage ${matchedIndex}`);
-  }
-}
 
 // --- Voice + Text Chatbox Integration Update (Refined) ---
 
@@ -1907,29 +1908,49 @@ sendPromptBtn.addEventListener('click', async () => {
 function moveToInitialPosition(mode, stage = null) {
   const siteBounds = getBoundsFromSiteGeometry(DJ_SITE_BOUNDS);
 
-  // Adjust zoom, pitch, and bearing dynamically
+  // Default values
   let zoom = 18;
   let pitch = 45;
   let bearing = 0;
 
-  if (mode === 0 || mode === 2) {
-    pitch = 45;
+  switch (mode) {
+    case 0: // Massing
+      pitch = 45;
+      zoom = 18;
+      bearing = 0;
+      break;
 
-    // Custom variations for steps 3, 4, 5 (mode === 2)
-    if (stage === 3) {
+    case 1: // Floorplans
+      pitch = 0;
+      zoom = 18;
+      bearing = 0;
+      break;
+
+    case 2: // Facade, Mockup, Export
+      pitch = 45;
+      if (stage === 4) {        // Mockup
+        bearing = 30;
+        zoom = 18.2;
+      } else if (stage === 5) { // Export
+        bearing = -90;
+        zoom = 18.5;
+      } else {                  // Facade
+        bearing = 0;
+        zoom = 18;
+      }
+      break;
+
+    case 3: // Structure
+      pitch = 45;
       bearing = -30;
       zoom = 17.5;
-    } else if (stage === 4) {
-      bearing = 45;
-      zoom = 18.2;
-    } else if (stage === 5) {
-      bearing = -90;
-      zoom = 18.5;
-    }
-  } else {
-    pitch = 0;
-    zoom = 18;
-    bearing = 0;
+      break;
+
+    default: // fallback
+      pitch = 45;
+      zoom = 18;
+      bearing = 0;
+      break;
   }
 
   map.flyTo({
@@ -1942,4 +1963,16 @@ function moveToInitialPosition(mode, stage = null) {
   });
 }
 
+
+
+function setCustomLayerOpacity(opacity) {
+  const meshes = [meshb64Mesh, meshoutMesh];
+  meshes.forEach(mesh => {
+    if (mesh && mesh.material) {
+      mesh.material.opacity = opacity;
+      mesh.material.transparent = opacity < 1.0;
+      mesh.material.needsUpdate = true;
+    }
+  });
+}
 
