@@ -11,4 +11,6 @@ urlpatterns = [
     path('api/projects/create/', views.api_create_project, name='api_create_project'),
     path('projects/<int:project_id>/delete/', views.delete_project, name='delete_project'),
      path('api/projects/<int:project_id>/get_polyline/', views.get_project_polyline, name='get_project_polyline'),
+
+     path("api/generate-image/", views.generate_image, name="generate-image"),
 ]

@@ -407,3 +407,60 @@ def get_project_polyline(request, project_id):
         })
     except Project.DoesNotExist:
         return HttpResponseBadRequest("Invalid project ID")
+
+
+
+import os
+import json
+import replicate
+import requests
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+# Initialize Replicate client with token
+replicate.Client(api_token=os.getenv("REPLICATE_API_TOKEN"))
+
+
+@csrf_exempt
+def generate_image(request):
+    """Handles image generation using Replicate's gen4-image model."""
+    print("[DEBUG] Received request:", request.method)
+
+    if request.method != "POST":
+        print("[ERROR] Invalid request method")
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        prompt = data.get("prompt", "").strip()
+        print("[DEBUG] Prompt received:", prompt)
+
+        if not prompt:
+            print("[ERROR] Prompt missing in request")
+            return JsonResponse({"error": "Prompt not provided"}, status=400)
+
+        replicate_input = {
+            "prompt": prompt,
+            "aspect_ratio": "16:9",
+            "resolution": "720p",
+            "reference_images": [
+ 
+                "https://i.ibb.co/Z67jLn2S/Screenshot-2025-07-02-at-05-11-28.png"
+            ]
+        }
+
+        print("[INFO] Sending input to Replicate:", replicate_input)
+        output = replicate.run("runwayml/gen4-image", input=replicate_input)
+        print("[INFO] Received output from Replicate:", output)
+
+        # Fix: convert to string before returning
+        return JsonResponse({"image_url": str(output)})
+
+    except json.JSONDecodeError as json_err:
+        print("[ERROR] JSON decode error:", json_err)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    except Exception as err:
+        print("[ERROR] Replicate API error:", str(err))
+        return JsonResponse({"error": str(err)}, status=500)
+    

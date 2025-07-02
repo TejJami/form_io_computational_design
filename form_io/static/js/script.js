@@ -1694,8 +1694,8 @@ function applyMockupStageOverrides() {
 
   // Force envelope_mode to 0
   if (envelopeInput) {
-    envelopeInput.value = 0;
-    console.log('[Mockup Override] envelope_mode set to 0');
+    envelopeInput.value = 2;
+    console.log('[Mockup Override] envelope_mode set to 2');
   }
 
   // Hide all Mapbox layers except the Rhino custom layer
@@ -1722,6 +1722,14 @@ function applyMockupStageOverrides() {
   if (labelEl) {
     labelEl.innerText = '';
   }
+
+  // Hide standard UI panels
+document.getElementById('tool-panels')?.classList.add('hidden');
+
+// Show mockup UI
+document.getElementById('mockup-ui')?.classList.remove('hidden');
+
+
 }
 
 
@@ -1760,6 +1768,9 @@ function updateStageUI() {
         }
       });
     }
+      // Restore default UI
+  document.getElementById('tool-panels')?.classList.remove('hidden');
+  document.getElementById('mockup-ui')?.classList.add('hidden');
   }
 
   moveToInitialPosition(mode, currentStage);
@@ -2007,4 +2018,40 @@ function setCustomLayerOpacity(opacity) {
     }
   });
 }
+
+
+document.getElementById('generate-mockup-btn').addEventListener('click', async () => {
+  const prompt = document.getElementById('mockup-prompt').value;
+  const mockupImageContainer = document.getElementById('mockup-image-container');
+
+  mockupImageContainer.innerHTML = `<div class="text-sm text-gray-400">Generating...</div>`;
+
+  try {
+    const response = await fetch("/api/generate-image/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: prompt })
+    });
+
+    if (!response.ok) {
+      throw new Error("Server error: " + response.status);
+    }
+
+    const data = await response.json();
+
+    if (data.image_url) {
+      mockupImageContainer.innerHTML = `
+        <img src="${data.image_url}" class="max-w-full max-h-[40vh] object-contain rounded shadow-md mx-auto" />
+        <p class="text-xs mt-1 text-gray-400">Generated using Replicate</p>
+      `;
+    } else if (data.error) {
+      mockupImageContainer.innerHTML = `<div class="text-red-500">Error: ${data.error}</div>`;
+    } else {
+      mockupImageContainer.innerHTML = `<div class="text-red-500">Unexpected response format.</div>`;
+    }
+  } catch (err) {
+    console.error(err);
+    mockupImageContainer.innerHTML = `<div class="text-red-500">Error: ${err.message}</div>`;
+  }
+});
 
