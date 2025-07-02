@@ -1689,42 +1689,86 @@ const envelopeModeMap = [0, 1, 2, 3, 2, 2];
  */
 let currentStage = 0;
 
+function applyMockupStageOverrides() {
+  const envelopeInput = document.getElementById('envelope_mode');
+
+  // Force envelope_mode to 0
+  if (envelopeInput) {
+    envelopeInput.value = 0;
+    console.log('[Mockup Override] envelope_mode set to 0');
+  }
+
+  // Hide all Mapbox layers except the Rhino custom layer
+  const layers = map.getStyle().layers;
+  if (layers) {
+    layers.forEach(layer => {
+      if (layer.id !== 'rhino-layer') {
+        try {
+          map.setLayoutProperty(layer.id, 'visibility', 'none');
+        } catch (err) {
+          // Some layers may not support layout changes
+        }
+      }
+    });
+    console.log('[Mockup Override] Non-custom map layers hidden');
+  }
+
+  // Clear Envelope dimension labels
+  clearEnvelopeLabels();
+  console.log('[Mockup Override] Envelope dimension labels cleared');
+
+  // Optionally clear the text label as well
+  const labelEl = document.getElementById('Envelope-area-label');
+  if (labelEl) {
+    labelEl.innerText = '';
+  }
+}
+
+
+
 /**
  * Updates visual steps and sets envelope_mode value
  */
 function updateStageUI() {
   const steps = document.querySelectorAll('.stage-step');
   const envelopeInput = document.getElementById('envelope_mode');
-  console.log('[Update UI] envelope_mode value:', envelopeInput.value);
-  console.log('[Update UI] Steps:', steps);
-
   if (!envelopeInput || steps.length === 0) return;
 
-  // Make sure currentStage is within bounds
-  currentStage = Math.min(currentStage, steps.length - 1); // This ensures we don't go beyond available steps
+  currentStage = Math.min(currentStage, steps.length - 1);
 
-  console.log('[Update UI] currentStage:', currentStage);
-
-  // Update step highlight
   steps.forEach((step, index) => {
-    step.classList.toggle('step-neutral', index <= currentStage); // Update step highlighting
+    step.classList.toggle('step-neutral', index <= currentStage);
   });
 
-  // Set and apply mapped envelope_mode
-  const mode = envelopeModeMap[currentStage];
-  envelopeInput.value = mode; // Set value for the envelope_mode input
+  let mode = envelopeModeMap[currentStage];
 
-  // Move camera to the initial position based on the mode
-  moveToInitialPosition(mode, currentStage); // Adjust camera based on mode
+  if (currentStage === 4) {
+    applyMockupStageOverrides();
+    mode = 0; // for camera and opacity handling
+  } else {
+    envelopeInput.value = mode;
 
-  // Set opacity for the current mode
-  const opacity = envelopeOpacityMap[mode] ?? 1.0;
-  setCustomLayerOpacity(opacity);
+    // Restore previously hidden layers
+    const layers = map.getStyle().layers;
+    if (layers) {
+      layers.forEach(layer => {
+        if (layer.id !== 'rhino-layer') {
+          try {
+            const defaultVisibility = layer.layout?.visibility || 'visible';
+            map.setLayoutProperty(layer.id, 'visibility', defaultVisibility);
+          } catch (err) {}
+        }
+      });
+    }
+  }
 
-  // Trigger recompute/save
+  moveToInitialPosition(mode, currentStage);
+  setCustomLayerOpacity(envelopeOpacityMap[mode] ?? 1.0);
   onSliderChange();
-  console.log(`[Stage] Now at stage ${currentStage}, envelope_mode: ${mode}`);
+
+  console.log(`[Stage] Now at stage ${currentStage}, envelope_mode set to: ${envelopeInput.value}`);
 }
+
 
 
 
@@ -1761,28 +1805,16 @@ function setupStageNavigation() {
 function initializeStageFromInput() {
   console.log('[Form IO] Initializing stage from envelope_mode input...');
   const envelopeInput = document.getElementById('envelope_mode');
-  console.log('[Form IO] envelope_mode input:', envelopeInput.length, envelopeInput.value);
   if (!envelopeInput) return;
 
-  const currentMode = parseInt(envelopeInput.value);
-  console.log('[Form IO] envelope_mode value:', currentMode);  // Check the value here
+  // Force the first stage to be Massing (mode 0)
+  currentStage = 0;
+  envelopeInput.value = envelopeModeMap[currentStage];
 
-  if (isNaN(currentMode)) {
-    console.warn('[Form IO] Invalid envelope_mode input value.');
-    return;
-  }
-
-  if (currentMode === 0) {
-    currentStage = 0; // Force it to be 0 if the envelope_mode is 0
-  } else {
-    const matchedIndex = envelopeModeMap.findIndex(mode => mode === currentMode);
-    currentStage = matchedIndex !== -1 ? matchedIndex : 0;
-  }
-
-  console.log('[Form IO] After setting currentStage:', currentStage);
-
+  console.log('[Form IO] Forced initial currentStage to:', currentStage);
   updateStageUI();
 }
+
 
 
 // --- Voice + Text Chatbox Integration Update (Refined) ---
