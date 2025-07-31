@@ -1905,12 +1905,13 @@ function speakText(text) {
   speechSynthesis.speak(utterance);
 }
 
-// Prompt sender logic
 const sendPromptBtn = document.getElementById('send_prompt');
+
 sendPromptBtn.addEventListener('click', async () => {
   const chatbox = document.getElementById('chatbox');
   const prompt = chatbox.value.trim();
   if (!prompt) return;
+
   addChatMessage(prompt, false);
   chatbox.value = '';
   showLoader();
@@ -1928,17 +1929,44 @@ sendPromptBtn.addEventListener('click', async () => {
 
     if (response.ok) {
       const data = await response.json();
-      const reasoning = data.parameters.reasoning || 'No reasoning returned';
-      const updates = data.parameters.parameters || {};
 
-      console.log('[AI RESPONSE]', reasoning);
-      console.log('[AI PARAMETER UPDATES]', updates);
+      if (data.intent === 'update') {
+        const reasoning = data.reasoning || 'No reasoning provided';
+        const updates = data.parameters || {};
 
-      addChatMessage(reasoning, true);
-      updateInputs(updates);
+        console.log('[AI INTENT]', data.intent);
+        console.log('[AI REASONING]', reasoning);
+        console.log('[AI PARAMETER UPDATES]', updates);
+
+        addChatMessage(reasoning, true);
+        updateInputs(updates);
+
+      } else if (data.intent === 'query') {
+        const answer = data.answer || '';
+        const sources = data.sources || [];
+
+        console.log('[AI INTENT]', data.intent);
+        console.log('[AI ANSWER]', answer);
+        console.log('[AI SOURCES]', sources);
+
+        let resultText = answer || 'No relevant results found.';
+
+        if (sources.length) {
+          resultText += `\n\nSources:\n` +
+            sources.map((s, i) => `- ${s.slice(0, 100)}…`).join('\n');
+        }
+
+        addChatMessage(resultText, true);
+
+      } else {
+        console.warn('Unknown intent:', data.intent);
+        addChatMessage('Error: Unknown response intent', true);
+      }
+
     } else {
       addChatMessage('Error: Unable to process prompt', true);
     }
+
   } catch (e) {
     console.error('Chat error:', e);
     addChatMessage('Error: Network or server issue', true);
@@ -1946,6 +1974,7 @@ sendPromptBtn.addEventListener('click', async () => {
     hideLoader();
   }
 });
+
 
 // Function to move the camera to the initial position based on the mode
 function moveToInitialPosition(mode, stage = null) {

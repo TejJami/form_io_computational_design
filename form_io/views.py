@@ -15,15 +15,27 @@ import traceback
 from .models import Project
 from django.views.decorators.http import require_POST
 import random
+from sentence_transformers import SentenceTransformer
+import faiss
+import pickle
+import traceback
 
 # load mapbox token from .env file
 load_dotenv()
 
-# Access the API key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_3")
+# === Load FAISS index and docstore ===
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INDEX_PATH = os.path.join(ROOT_DIR, "bauordnung_index.faiss")
+DOCSTORE_PATH = os.path.join(ROOT_DIR, "bauordnung_chunks.pkl")
 
-# Initialize the OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+embedding_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+faiss_index = faiss.read_index(INDEX_PATH)
+
+with open(DOCSTORE_PATH, "rb") as f:
+    docstore = pickle.load(f)
+
+# === OpenAI client ===
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY_4"))
 
 # Field groups mapped to agent types
 AGENT_INPUT_GROUPS = {
@@ -44,6 +56,178 @@ AGENT_PROMPT_GUIDANCE = {
     "envelope": "You are an envelope design assistant. You only deal with envelope parameters like setback, mode, vertices, etc.",
     "facade": "You are a facade design assistant. Handle only facade inputs like balcony types, widths, opening ratios, etc."
 }
+import re
+
+def safe_json_parse(text):
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Try fixing single quotes → double quotes
+        try:
+            text = re.sub(r"'", '"', text)
+            return json.loads(text)
+        except Exception:
+            return None
+        
+def chat_architecture_assistant(request):
+    print("[INFO] Received request")
+
+    if request.method != "POST":
+        print("[ERROR] Invalid request method")
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        print(f"[INFO] Parsed body: {body}")
+
+        user_prompt = body.get("prompt", "").strip()
+        print(f"[INFO] User prompt: '{user_prompt}'")
+
+        if not user_prompt:
+            print("[ERROR] Prompt is empty")
+            return JsonResponse({"error": "Prompt is empty"}, status=400)
+
+        # === Step 1: Classify prompt intent ===
+        print("[INFO] Classifying intent")
+        intent_response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a classifier that only responds with JSON: {'intent': 'query'} or {'intent': 'update'}."},
+                {"role": "user", "content": f"Classify this prompt: {user_prompt}"}
+            ],
+            max_tokens=50
+        )
+
+        raw_intent = intent_response.choices[0].message.content
+        print(f"[DEBUG] Raw intent response: {raw_intent}")
+
+        intent_json = safe_json_parse(raw_intent)
+        print(f"[DEBUG] Parsed intent JSON: {intent_json}")
+
+        if not intent_json or "intent" not in intent_json:
+            print(f"[INTENT PARSE ERROR] Got this from OpenAI: {raw_intent}")
+            return JsonResponse({"error": "Malformed response from model"}, status=400)
+
+        intent = intent_json.get("intent")
+        print(f"[INFO] Detected intent: {intent}")
+
+        if intent == "query":
+            print("[INFO] Handling query intent")
+            embedding = embedding_model.encode([user_prompt])
+            print(f"[DEBUG] Computed embedding: {embedding}")
+
+            D, I = faiss_index.search(embedding, k=3)
+            print(f"[DEBUG] FAISS distances: {D}, indices: {I}")
+
+            retrieved_chunks = [docstore[i] for i in I[0] if i < len(docstore)]
+            print(f"[INFO] Retrieved documents: {retrieved_chunks}")
+
+            # === Use GPT to answer based on retrieved chunks ===
+            retrieval_prompt = f"""
+        You are a helpful assistant for architecture and regulation guidance.
+        Use the following context to answer the question clearly and directly.
+
+        Context:
+        {chr(10).join(retrieved_chunks)}
+
+        Question:
+        {user_prompt}
+
+        Answer:
+        """
+
+            answer_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You answer clearly and concisely based only on provided context."},
+                    {"role": "user", "content": retrieval_prompt}
+                ],
+                max_tokens=300
+            )
+
+            answer = answer_response.choices[0].message.content
+            print(f"[INFO] Final GPT answer: {answer}")
+
+            return JsonResponse({
+                "intent": "query",
+                "answer": answer,
+                "sources": retrieved_chunks
+            })
+
+
+        elif intent == "update":
+            print("[INFO] Handling update intent")
+            valid_keys = sorted(list(VALID_INPUT_KEYS))
+            print(f"[DEBUG] Valid input keys: {valid_keys}")
+
+            match_prompt = f"""
+            Match this prompt to the best parameter key from the following list:
+            Prompt: "{user_prompt}"
+            Keys: {valid_keys}
+            Respond as: {{ "match": "..." }}
+            """
+
+            match_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Return only JSON with 'match' key"},
+                    {"role": "user", "content": match_prompt}
+                ],
+                max_tokens=100
+            )
+            print(f"[DEBUG] Match response: {match_response.choices[0].message.content}")
+            match_key = json.loads(match_response.choices[0].message.content)["match"]
+
+            if match_key not in VALID_INPUT_KEYS:
+                print(f"[ERROR] Invalid matched key: {match_key}")
+                return JsonResponse({"error": f"Invalid matched key: {match_key}"}, status=400)
+
+            update_prompt = f"""
+                The user gave this instruction: "{user_prompt}"
+                The matched parameter key is: "{match_key}"
+
+                Please return a response as JSON like:
+                {{
+                "reasoning": "Sure, I’ll set it to ...",
+                "parameters": {{
+                    "{match_key}": updated_value
+                }}
+                }}
+                """
+
+
+            update_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Return valid JSON with parameter update."},
+                    {"role": "user", "content": update_prompt}
+                ],
+                max_tokens=300
+            )
+            print(f"[DEBUG] Update response: {update_response.choices[0].message.content}")
+            update_data = json.loads(update_response.choices[0].message.content)
+
+            parameters = {
+                k: clean_value(v) for k, v in update_data.get("parameters", {}).items() if k in VALID_INPUT_KEYS
+            }
+
+            print(f"[DEBUG] Matched key: {match_key}")
+            print(f"[DEBUG] Update parameters: {parameters}")
+            print(f"[DEBUG] Reasoning: {update_data.get('reasoning', '')}")
+
+            return JsonResponse({
+                "intent": "update",
+                "parameters": parameters,
+                "reasoning": update_data.get("reasoning", "")
+            })
+
+        else:
+            print("[ERROR] Unknown intent value")
+            return JsonResponse({"error": "Could not determine intent."}, status=400)
+
+    except Exception as e:
+        print("[ERROR]", traceback.format_exc())
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @csrf_exempt
@@ -83,11 +267,7 @@ def solve_grasshopper(request):
             payload = {"algo": encoded, "pointer": None, "values": values}
             response = requests.post(post_url, json=payload)
 
-            # if response.status_code != 200:
-            #     print("Compute server error:", response.text)
-            #     return JsonResponse({"success": False, "error": response.text}, status=response.status_code)
 
-            # 5. Parse and Return Result
             res_data = response.json()
             print("Response revieved from Rhino Compute")
             return JsonResponse(res_data)
@@ -97,13 +277,6 @@ def solve_grasshopper(request):
             return JsonResponse({"success": False, "error": str(e)}, status=500)
 
     return JsonResponse({"success": False, "error": "Only POST method allowed."})
-
-import re
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from .models import Project  # Assuming you're using this
-from openai import OpenAI
 
 # Converts camelCase or PascalCase to snake_case (if needed elsewhere)
 def normalize_key(key):
@@ -130,104 +303,6 @@ VALID_INPUT_KEYS = {
     "facade_block2_balconywidth", "facade_block2_balconytype"
 }
 
-@csrf_exempt
-def chat_with_openai(request):
-    if request.method != 'POST':
-        return JsonResponse({"error": "Invalid request method"}, status=400)
-
-    try:
-        body = json.loads(request.body)
-        prompt = body.get("prompt", "").strip()
-        if not prompt:
-            return JsonResponse({"error": "Prompt cannot be empty."}, status=400)
-
-        agent_type = route_prompt_to_agent(prompt)
-        if not agent_type:
-            return JsonResponse({"error": "Unable to classify prompt to an agent."}, status=400)
-
-        valid_keys = sorted(list(VALID_INPUT_KEYS))
-
-        # STEP 1 — Ask GPT to pick the best-matching key
-        match_prompt = f"""
-You are an assistant that maps user instructions to known architecture input keys.
-
-Choose one exact parameter from the list below that best fits this user prompt:
-{prompt}
-
-Use ONLY this list of parameter names:
-{valid_keys}
-
-Respond like:
-{{
-  "match": "block2_width"
-}}
-"""
-
-        match_response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You respond only with JSON and only use known parameter names."},
-                {"role": "user", "content": match_prompt}
-            ],
-            max_tokens=100
-        )
-        match_content = match_response.choices[0].message.content
-        try:
-            matched_key = json.loads(match_content).get("match")
-        except Exception:
-            return JsonResponse({"error": "Unable to extract match from OpenAI response."}, status=500)
-
-        if matched_key not in VALID_INPUT_KEYS:
-            return JsonResponse({"error": f"Matched key '{matched_key}' is not a valid parameter."}, status=400)
-
-        # STEP 2 — Now ask GPT to change that one key based on the prompt
-        update_prompt = f"""
-Update the following parameter based on this prompt:
-
-Prompt: {prompt}
-Parameter to update: {matched_key}
-
-Respond in this format:
-{{
-  "reasoning": "explains why the change was made",
-  "parameters": {{
-    "{matched_key}": new_value
-  }}
-}}
-"""
-
-        update_response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an AI assistant for architecture parameters. Return only valid JSON."},
-                {"role": "user", "content": update_prompt}
-            ],
-            max_tokens=300
-        )
-
-        update_content = update_response.choices[0].message.content
-        parsed = parse_openai_response(update_content)
-
-        if "error" in parsed:
-            return JsonResponse(parsed, status=500)
-
-        # Filter only exact keys
-        updates = {
-            k: clean_value(v)
-            for k, v in parsed["parameters"].items()
-            if k in VALID_INPUT_KEYS
-        }
-
-        return JsonResponse({
-            "parameters": {
-                "parameters": updates,
-                "reasoning": parsed.get("reasoning", "")
-            }
-        })
-
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
 def parse_openai_response(raw):
     try:
         data = json.loads(raw)
@@ -237,17 +312,6 @@ def parse_openai_response(raw):
         }
     except json.JSONDecodeError:
         return {"error": "Invalid JSON returned from OpenAI."}
-
-def route_prompt_to_agent(prompt):
-    lower = prompt.lower()
-    print(f"[DEBUG] Routing prompt: {lower}")
-    if any(term in lower for term in ["block", "units", "tower", "floor"]):
-        return "building"
-    if any(term in lower for term in ["setback", "envelope", "site"]):
-        return "envelope"
-    if any(term in lower for term in ["facade", "balcony", "shading"]):
-        return "facade"
-    return None
 
 
 @csrf_exempt
@@ -307,7 +371,7 @@ def project_list(request):
     for project in projects:
         project.color = get_random_pastel()
 
-    mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
+    mapbox_token = settings.MAPBOX_PUBLIC_TOKEN
     if not mapbox_token:
         print("Warning: MAPBOX_PUBLIC_TOKEN is not set in settings.")
 
@@ -318,7 +382,7 @@ def project_list(request):
 
 def project_detail(request, project_id):
     project = get_object_or_404(Project, id=project_id)
-    mapbox_token = os.getenv("MAPBOX_PUBLIC_TOKEN")
+    mapbox_token = settings.MAPBOX_PUBLIC_TOKEN
     if not mapbox_token:
         print("Warning: MAPBOX_PUBLIC_TOKEN is not set in settings.")
             
@@ -407,60 +471,3 @@ def get_project_polyline(request, project_id):
         })
     except Project.DoesNotExist:
         return HttpResponseBadRequest("Invalid project ID")
-
-
-
-import os
-import json
-import replicate
-import requests
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
-# Initialize Replicate client with token
-replicate.Client(api_token=os.getenv("REPLICATE_API_TOKEN"))
-
-
-@csrf_exempt
-def generate_image(request):
-    """Handles image generation using Replicate's gen4-image model."""
-    print("[DEBUG] Received request:", request.method)
-
-    if request.method != "POST":
-        print("[ERROR] Invalid request method")
-        return JsonResponse({"error": "Only POST allowed"}, status=405)
-
-    try:
-        data = json.loads(request.body)
-        prompt = data.get("prompt", "").strip()
-        print("[DEBUG] Prompt received:", prompt)
-
-        if not prompt:
-            print("[ERROR] Prompt missing in request")
-            return JsonResponse({"error": "Prompt not provided"}, status=400)
-
-        replicate_input = {
-            "prompt": prompt,
-            "aspect_ratio": "16:9",
-            "resolution": "720p",
-            "reference_images": [
- 
-                "https://i.ibb.co/Z67jLn2S/Screenshot-2025-07-02-at-05-11-28.png"
-            ]
-        }
-
-        print("[INFO] Sending input to Replicate:", replicate_input)
-        output = replicate.run("runwayml/gen4-image", input=replicate_input)
-        print("[INFO] Received output from Replicate:", output)
-
-        # Fix: convert to string before returning
-        return JsonResponse({"image_url": str(output)})
-
-    except json.JSONDecodeError as json_err:
-        print("[ERROR] JSON decode error:", json_err)
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    except Exception as err:
-        print("[ERROR] Replicate API error:", str(err))
-        return JsonResponse({"error": str(err)}, status=500)
-    
