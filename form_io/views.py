@@ -20,6 +20,7 @@ import faiss
 import pickle
 import traceback
 import re
+from django.core.cache import cache
 
 # load mapbox token from .env file
 load_dotenv()
@@ -214,46 +215,99 @@ def chat_architecture_assistant(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+# @csrf_exempt
+# def solve_grasshopper(request):
+#     if request.method == "POST":
+#         try:
+#             # 1. Collect Parameters
+#             gh_file_name = request.POST.get("grasshopper_file_name")
+#             inputs = json.loads(request.POST.get("input_data", "{}"))
+#             print("Inputs received:", inputs)
+
+#             # Locate Grasshopper definition
+#             gh_file_path = os.path.join(settings.GRASSHOPPER_FILES_DIR, gh_file_name)
+#             if not os.path.exists(gh_file_path):
+#                 return JsonResponse({"success": False, "error": f"File {gh_file_name} not found."})
+
+#             # 2. Encode Grasshopper File
+#             with open(gh_file_path, "rb") as gh_file:
+#                 gh_data = gh_file.read()
+#                 encoded = base64.b64encode(gh_data).decode()  # Keep it as Base64-encoded string
+
+#             # 3. Prepare Inputs
+#             values = []
+#             for param_name, param_value in inputs.items():
+#                 inner_tree = {
+#                     "{0;0}": [
+#                         {
+#                             "type": "System.Double" if isinstance(param_value, (float, int)) else "System.String",
+#                             "data": param_value,
+#                         }
+#                     ]
+#                 }
+#                 values.append({"ParamName": param_name, "InnerTree": inner_tree})
+
+#             # 4. Send Request to Rhino Compute
+#             post_url = "http://localhost:6001/grasshopper"
+#             payload = {"algo": encoded, "pointer": None, "values": values}
+#             response = requests.post(post_url, json=payload)
+
+
+#             res_data = response.json()
+#             print("Response revieved from Rhino Compute")
+#             return JsonResponse(res_data)
+
+#         except Exception as e:
+#             print("Error in solve_grasshopper:", str(e))
+#             return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+#     return JsonResponse({"success": False, "error": "Only POST method allowed."})
+
+
+
+
 @csrf_exempt
 def solve_grasshopper(request):
     if request.method == "POST":
         try:
-            # 1. Collect Parameters
             gh_file_name = request.POST.get("grasshopper_file_name")
             inputs = json.loads(request.POST.get("input_data", "{}"))
             print("Inputs received:", inputs)
 
-            # Locate Grasshopper definition
+            cache_key = compute_cache_key(gh_file_name, inputs)
+            cached_result = cache.get(cache_key)
+
+            if cached_result:
+                print("[CACHE HIT]")
+                return JsonResponse(cached_result)
+
+            # === No cache, compute ===
             gh_file_path = os.path.join(settings.GRASSHOPPER_FILES_DIR, gh_file_name)
             if not os.path.exists(gh_file_path):
                 return JsonResponse({"success": False, "error": f"File {gh_file_name} not found."})
 
-            # 2. Encode Grasshopper File
             with open(gh_file_path, "rb") as gh_file:
                 gh_data = gh_file.read()
-                encoded = base64.b64encode(gh_data).decode()  # Keep it as Base64-encoded string
+                encoded = base64.b64encode(gh_data).decode()
 
-            # 3. Prepare Inputs
             values = []
             for param_name, param_value in inputs.items():
                 inner_tree = {
-                    "{0;0}": [
-                        {
-                            "type": "System.Double" if isinstance(param_value, (float, int)) else "System.String",
-                            "data": param_value,
-                        }
-                    ]
+                    "{0;0}": [{
+                        "type": "System.Double" if isinstance(param_value, (float, int)) else "System.String",
+                        "data": param_value,
+                    }]
                 }
                 values.append({"ParamName": param_name, "InnerTree": inner_tree})
 
-            # 4. Send Request to Rhino Compute
             post_url = "http://localhost:6001/grasshopper"
             payload = {"algo": encoded, "pointer": None, "values": values}
             response = requests.post(post_url, json=payload)
 
-
             res_data = response.json()
-            print("Response revieved from Rhino Compute")
+            print("[CACHE STORE]")
+            cache.set(cache_key, res_data, timeout=60 * 60)  # 1 hour cache (customize as needed)
+
             return JsonResponse(res_data)
 
         except Exception as e:
@@ -261,6 +315,10 @@ def solve_grasshopper(request):
             return JsonResponse({"success": False, "error": str(e)}, status=500)
 
     return JsonResponse({"success": False, "error": "Only POST method allowed."})
+
+
+
+
 
 # Converts camelCase or PascalCase to snake_case (if needed elsewhere)
 def normalize_key(key):
@@ -455,3 +513,9 @@ def get_project_polyline(request, project_id):
         })
     except Project.DoesNotExist:
         return HttpResponseBadRequest("Invalid project ID")
+
+import hashlib
+
+def compute_cache_key(file_name, inputs):
+    serialized = json.dumps({"file": file_name, "inputs": inputs}, sort_keys=True)
+    return hashlib.md5(serialized.encode()).hexdigest()

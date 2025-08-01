@@ -130,3 +130,10 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 MAPBOX_PUBLIC_TOKEN = os.getenv('MAPBOX_TOKEN')
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(BASE_DIR, "django_cache"),
+    }
+}

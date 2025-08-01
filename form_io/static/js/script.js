@@ -2014,7 +2014,8 @@ function moveToInitialPosition(mode, stage = null) {
     pitch: pitch,
     bearing: bearing,
     essential: true,
-    duration: 4000
+    duration: 1200, // 2 seconds
+    curve: 1.5, // Smooth curve
   });
 }
 
