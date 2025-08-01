@@ -274,7 +274,7 @@ def chat_architecture_assistant(request):
 
             {chr(10).join(regulatory_chunks)}
 
-            Is the update allowed? Only check the minimum value and you think of a maximum value and allow if its between them. If not, suggest a compliant alternative and indicate whether user confirmation is needed.
+            Is the update allowed?  If not, suggest a compliant alternative and indicate whether user confirmation is needed.
 
             Respond only in valid JSON format:
             {{
@@ -301,6 +301,7 @@ def chat_architecture_assistant(request):
                 "match_key": match_key,
                 "allowed": regulation_json.get("allowed"),
                 "suggested_value": regulation_json.get("suggested_value"),
+                "proposed_value": proposed_value,
                 "reasoning": regulation_json.get("reasoning"),
                 "confirmation_required": regulation_json.get("confirmation_required", False),
                 "parameters": {

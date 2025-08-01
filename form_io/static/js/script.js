@@ -1913,6 +1913,7 @@ sendPromptBtn.addEventListener('click', async () => {
 
     if (response.ok) {
       const data = await response.json();
+      console.log('[AI Response]', data); 
 
       if (data.intent === 'update') {
         const reasoning = data.reasoning || 'No reasoning provided';
@@ -1943,38 +1944,57 @@ sendPromptBtn.addEventListener('click', async () => {
         addChatMessage(resultText, true);
 
       }else if (data.intent === 'regulation_aware_update') {
-      const reasoning = data.reasoning || 'No reasoning provided.';
-      const updates = data.parameters || {};
-      const needsConfirm = data.confirmation_required;
-      const suggestion = data.suggested_value;
+  const reasoning = data.reasoning || 'No reasoning provided.';
+  const matchKey = data.match_key;
+  const suggested = data.suggested_value;
+  const proposed = data.proposed_value;
+  const updates = data.parameters || {};
+  const needsConfirm = data.confirmation_required;
 
-      console.log('[AI INTENT]', data.intent);
-      console.log('[AI REASONING]', reasoning);
-      console.log('[AI SUGGESTED VALUE]', suggestion);
+  addChatMessage(reasoning, true);
 
-      addChatMessage(reasoning, true);
+  if (needsConfirm && matchKey && (suggested !== undefined || proposed !== undefined)) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mt-2 flex flex-col gap-2';
 
-      if (needsConfirm && suggestion !== undefined) {
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn btn-sm btn-success btn-outline font-xs mt-2';
-        confirmBtn.innerText = `Apply suggested value: ${suggestion}`;
+    const label = document.createElement('label');
+    label.textContent = `Choose value for "${matchKey}":`;
+    label.className = 'text-sm font-medium';
+    wrapper.appendChild(label);
 
-        confirmBtn.onclick = () => {
-          const updatedParam = Object.keys(updates)[0];
-          updateInputs({ [updatedParam]: suggestion });
-          addChatMessage(`Applied corrected value: ${suggestion} for ${updatedParam}`, true);
-        };
+    const select = document.createElement('select');
+    select.className = 'select select-sm select-bordered w-fit text-sm';
 
-        const chatMessages = document.getElementById('chat-messages');
-        chatMessages.appendChild(confirmBtn);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
+    const optionSuggested = document.createElement('option');
+    optionSuggested.value = 'suggested';
+    optionSuggested.textContent = `Suggested: ${suggested}`;
+    select.appendChild(optionSuggested);
 
-      if (!needsConfirm && Object.keys(updates).length > 0) {
-        updateInputs(updates);
-        addChatMessage('Inputs updated automatically.', true);
-      }
-      } else {
+    const optionActual = document.createElement('option');
+    optionActual.value = 'actual';
+    optionActual.textContent = `Actual: ${proposed}`;
+    select.appendChild(optionActual);
+
+    wrapper.appendChild(select);
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'btn btn-sm btn-neutral w-fit';
+    applyBtn.textContent = 'Apply selected value';
+
+    applyBtn.onclick = () => {
+      const selected = select.value;
+      const valueToApply = selected === 'actual' ? proposed : suggested;
+      updateInputs({ [matchKey]: valueToApply });
+      addChatMessage(`Applied "${selected}" value: ${valueToApply}`, true);
+    };
+
+    wrapper.appendChild(applyBtn);
+
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.appendChild(wrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+} else {
         console.warn('Unknown intent:', data.intent);
         addChatMessage('Error: Unknown response intent', true);
       }

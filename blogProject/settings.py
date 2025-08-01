@@ -129,7 +129,7 @@ GRASSHOPPER_FILES_DIR = os.path.join(BASE_DIR, "grasshopper_files")
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-MAPBOX_PUBLIC_TOKEN = os.getenv('MAPBOX_TOKEN')
+MAPBOX_PUBLIC_TOKEN = "pk.eyJ1IjoidGVqMDUiLCJhIjoiY21iNW9hemtjMGkxbTJocXN1Mjg5ZTM2diJ9.1gznoNNytFuYs2iMTZ52NQ"
 
 CACHES = {
     "default": {
