@@ -76,7 +76,7 @@ def chat_architecture_assistant(request):
         intent_response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a classifier that only responds with JSON: {'intent': 'query'} or {'intent': 'update'}."},
+                {"role": "system", "content": "You are a classifier. Only return JSON like: {'intent': 'query'} or {'intent': 'regulation_aware_update'}."},
                 {"role": "user", "content": f"Classify this prompt: {user_prompt}"}
             ],
             max_tokens=50
@@ -204,6 +204,108 @@ def chat_architecture_assistant(request):
                 "intent": "update",
                 "parameters": parameters,
                 "reasoning": update_data.get("reasoning", "")
+            })
+
+        elif intent == "regulation_aware_update":
+            print("[INFO] Handling regulation-aware update intent")
+
+            # Step 1a: Match the input key from the prompt
+            valid_keys = sorted(list(VALID_INPUT_KEYS))
+            print(f"[DEBUG] Valid input keys: {valid_keys}")
+
+            match_prompt = f"""
+            Match this prompt to the best parameter key from the following list:
+            Prompt: "{user_prompt}"
+            Keys: {valid_keys}
+            Respond as: {{ "match": "..." }}
+            """
+
+            match_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Return only JSON with 'match' key"},
+                    {"role": "user", "content": match_prompt}
+                ],
+                max_tokens=50
+            )
+            print(f"[DEBUG] Match response: {match_response.choices[0].message.content}")
+            match_json = safe_json_parse(match_response.choices[0].message.content)
+            match_key = match_json.get("match")
+
+            if not match_key or match_key not in VALID_INPUT_KEYS:
+                print(f"[ERROR] Invalid matched key: {match_key}")
+                return JsonResponse({"error": "Could not identify a valid parameter key."}, status=400)
+
+            # Step 1b: Extract proposed value
+            value_prompt = f"""
+            Extract the numeric value the user wants to assign in this instruction:
+            "{user_prompt}"
+
+            Respond only with JSON: {{ "value": number }}
+            """
+
+            value_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Extract numeric value. Return only valid JSON."},
+                    {"role": "user", "content": value_prompt}
+                ],
+                max_tokens=50
+            )
+            print(f"[DEBUG] Value extraction response: {value_response.choices[0].message.content}")
+            value_json = safe_json_parse(value_response.choices[0].message.content)
+            proposed_value = clean_value(value_json.get("value"))
+
+            if proposed_value is None:
+                print("[ERROR] Failed to extract proposed value")
+                return JsonResponse({"error": "Could not extract proposed value."}, status=400)
+
+            # Step 2: Retrieve relevant regulations
+            search_query = f"What does the Berlin Bauordnung say about {match_key.replace('_', ' ')}?"
+            embedding = embedding_model.encode([search_query])
+            D, I = faiss_index.search(embedding, k=3)
+            regulatory_chunks = [docstore[i] for i in I[0] if i < len(docstore)]
+            print(f"[INFO] Retrieved regulatory documents: {regulatory_chunks}")
+
+            # Step 3: Compose regulation compliance check prompt
+            regulation_check_prompt = f"""
+            You are an AI assistant for architects. A user wants to set `{match_key}` to `{proposed_value}`.
+            Check the following regulation context for any constraints:
+
+            {chr(10).join(regulatory_chunks)}
+
+            Is the update allowed? Only check the minimum value and you think of a maximum value and allow if its between them. If not, suggest a compliant alternative and indicate whether user confirmation is needed.
+
+            Respond only in valid JSON format:
+            {{
+                "allowed": true or false,
+                "reasoning": "...",
+                "suggested_value": optional number (if not allowed),
+                "confirmation_required": true or false
+            }}
+            """
+
+            regulation_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Be precise and helpful. Return only valid JSON."},
+                    {"role": "user", "content": regulation_check_prompt}
+                ],
+                max_tokens=300
+            )
+            print(f"[DEBUG] Regulation-aware GPT response: {regulation_response.choices[0].message.content}")
+            regulation_json = safe_json_parse(regulation_response.choices[0].message.content)
+
+            return JsonResponse({
+                "intent": "regulation_aware_update",
+                "match_key": match_key,
+                "allowed": regulation_json.get("allowed"),
+                "suggested_value": regulation_json.get("suggested_value"),
+                "reasoning": regulation_json.get("reasoning"),
+                "confirmation_required": regulation_json.get("confirmation_required", False),
+                "parameters": {
+                    match_key: proposed_value if regulation_json.get("allowed") else regulation_json.get("suggested_value")
+                }
             })
 
         else:

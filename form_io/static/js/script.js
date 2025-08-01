@@ -1942,6 +1942,38 @@ sendPromptBtn.addEventListener('click', async () => {
 
         addChatMessage(resultText, true);
 
+      }else if (data.intent === 'regulation_aware_update') {
+      const reasoning = data.reasoning || 'No reasoning provided.';
+      const updates = data.parameters || {};
+      const needsConfirm = data.confirmation_required;
+      const suggestion = data.suggested_value;
+
+      console.log('[AI INTENT]', data.intent);
+      console.log('[AI REASONING]', reasoning);
+      console.log('[AI SUGGESTED VALUE]', suggestion);
+
+      addChatMessage(reasoning, true);
+
+      if (needsConfirm && suggestion !== undefined) {
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-sm btn-success btn-outline font-xs mt-2';
+        confirmBtn.innerText = `Apply suggested value: ${suggestion}`;
+
+        confirmBtn.onclick = () => {
+          const updatedParam = Object.keys(updates)[0];
+          updateInputs({ [updatedParam]: suggestion });
+          addChatMessage(`Applied corrected value: ${suggestion} for ${updatedParam}`, true);
+        };
+
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.appendChild(confirmBtn);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      if (!needsConfirm && Object.keys(updates).length > 0) {
+        updateInputs(updates);
+        addChatMessage('Inputs updated automatically.', true);
+      }
       } else {
         console.warn('Unknown intent:', data.intent);
         addChatMessage('Error: Unknown response intent', true);
