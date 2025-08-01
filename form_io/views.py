@@ -19,6 +19,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import pickle
 import traceback
+import re
 
 # load mapbox token from .env file
 load_dotenv()
@@ -37,26 +38,7 @@ with open(DOCSTORE_PATH, "rb") as f:
 # === OpenAI client ===
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY_4"))
 
-# Field groups mapped to agent types
-AGENT_INPUT_GROUPS = {
-    "building": [
-        "block",  # match any key starting with 'block'
-    ],
-    "envelope": [
-        "envelope_"
-    ],
-    "facade": [
-        "facade_"
-    ]
-}
 
-# Prompt templates per agent
-AGENT_PROMPT_GUIDANCE = {
-    "building": "You are a building configuration assistant. Only respond with building-related inputs, like block height, units, floor count, corridor width, etc.",
-    "envelope": "You are an envelope design assistant. You only deal with envelope parameters like setback, mode, vertices, etc.",
-    "facade": "You are a facade design assistant. Handle only facade inputs like balcony types, widths, opening ratios, etc."
-}
-import re
 
 def safe_json_parse(text):
     try:
@@ -68,7 +50,8 @@ def safe_json_parse(text):
             return json.loads(text)
         except Exception:
             return None
-        
+
+@csrf_exempt       
 def chat_architecture_assistant(request):
     print("[INFO] Received request")
 
@@ -139,7 +122,8 @@ def chat_architecture_assistant(request):
             answer_response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You answer clearly and concisely based only on provided context."},
+                    {"role": "system", "content": "You answer clearly and concisely based on provided context. If the answer is not fully clear, explain what is known and what would require clarification from another source. Do not just say 'not found' if something can be inferred."
+},
                     {"role": "user", "content": retrieval_prompt}
                 ],
                 max_tokens=300

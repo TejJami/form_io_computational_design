@@ -45,6 +45,7 @@ function onSliderChangeDebounced() {
   clearTimeout(sliderTimeout); // Clear previous timer
   sliderTimeout = setTimeout(() => {
     console.log('[Form IO] Debounced slider/input changed – recomputing...');
+
     compute();
     saveInputsToProject(getInputs());
   }, 1000); // Delay in milliseconds
@@ -188,6 +189,7 @@ function replaceCurrentMesh(mesh, type) {
   
   console.log(`[Form IO] Replaced current mesh with type: ${type}`)
   map.triggerRepaint(); // Explicitly force re-render
+
 
 }
 
@@ -737,6 +739,8 @@ const customLayer = {
   type: 'custom',
   renderingMode: '3d',
   onAdd: async function (_map, gl) {
+
+
     threeCamera = new THREE.Camera()
     threeScene = new THREE.Scene()
 
@@ -951,27 +955,6 @@ function getCSRFToken() {
 }
 
 
-// Loader messages and logic
-let loaderInterval;
-const loaderMessages = ["Talking to OpenAI...", "Analyzing prompt", "Loading model"];
-let currentLoaderIndex = 0;
-
-function showLoader() {
-    const loader = document.getElementById('loader');
-    loader.style.display = 'block';
-    loader.textContent = loaderMessages[currentLoaderIndex]; // Set initial message
-    loaderInterval = setInterval(() => {
-        currentLoaderIndex = (currentLoaderIndex + 1) % loaderMessages.length;
-        loader.textContent = loaderMessages[currentLoaderIndex]; // Cycle through messages
-    }, 1000); // Change message every 1 second
-}
-
-function hideLoader() {
-    const loader = document.getElementById('loader');
-    loader.style.display = 'none';
-    clearInterval(loaderInterval);
-    currentLoaderIndex = 0; // Reset index
-}
 function updateInputs(parameters, suppressTrigger = false) {
   Object.keys(parameters).forEach(key => {
     const inputElement = document.getElementById(key);
@@ -1682,7 +1665,7 @@ document.getElementById('styleSwitcher').addEventListener('change', function (e)
 });
 
 
-const envelopeModeMap = [0, 1, 2, 3, 2, 2];
+const envelopeModeMap = [0, 1, 2, 3];
 
 /**
  * Current stage index tracker (0-4)
@@ -1732,8 +1715,6 @@ document.getElementById('mockup-ui')?.classList.remove('hidden');
 
 }
 
-
-
 /**
  * Updates visual steps and sets envelope_mode value
  */
@@ -1742,43 +1723,46 @@ function updateStageUI() {
   const envelopeInput = document.getElementById('envelope_mode');
   if (!envelopeInput || steps.length === 0) return;
 
+  // Clamp currentStage to valid index range
   currentStage = Math.min(currentStage, steps.length - 1);
+   let mode = envelopeModeMap[currentStage];
+   envelopeInput.value = mode;
 
+  // Update step classes
   steps.forEach((step, index) => {
     step.classList.toggle('step-neutral', index <= currentStage);
   });
 
-  let mode = envelopeModeMap[currentStage];
 
-  if (currentStage === 4) {
-    applyMockupStageOverrides();
-    mode = 0; // for camera and opacity handling
-  } else {
-    envelopeInput.value = mode;
 
-    // Restore previously hidden layers
-    const layers = map.getStyle().layers;
-    if (layers) {
-      layers.forEach(layer => {
-        if (layer.id !== 'rhino-layer') {
-          try {
-            const defaultVisibility = layer.layout?.visibility || 'visible';
-            map.setLayoutProperty(layer.id, 'visibility', defaultVisibility);
-          } catch (err) {}
+  // Restore previously hidden layers
+  const layers = map.getStyle()?.layers;
+  if (layers) {
+    layers.forEach(layer => {
+      if (layer.id !== 'rhino-layer') {
+        try {
+          const defaultVisibility = layer.layout?.visibility || 'visible';
+          map.setLayoutProperty(layer.id, 'visibility', defaultVisibility);
+        } catch (err) {
+          console.warn(`Failed to restore visibility for layer: ${layer.id}`, err);
         }
-      });
-    }
-      // Restore default UI
-  document.getElementById('tool-panels')?.classList.remove('hidden');
-  document.getElementById('mockup-ui')?.classList.add('hidden');
+      }
+    });
   }
 
+  // Restore default UI panels
+  document.getElementById('tool-panels')?.classList.remove('hidden');
+  document.getElementById('mockup-ui')?.classList.add('hidden');
+
+  // Move map, adjust opacity, and reapply slider state
   moveToInitialPosition(mode, currentStage);
   setCustomLayerOpacity(envelopeOpacityMap[mode] ?? 1.0);
   onSliderChange();
 
+
   console.log(`[Stage] Now at stage ${currentStage}, envelope_mode set to: ${envelopeInput.value}`);
 }
+
 
 
 
@@ -1803,7 +1787,7 @@ function setupStageNavigation() {
   });
 
   nextBtn.addEventListener('click', () => {
-    if (currentStage < envelopeModeMap.length - 1) {
+    if (currentStage < 3) {
       currentStage++;
       updateStageUI();
     }
@@ -1914,7 +1898,7 @@ sendPromptBtn.addEventListener('click', async () => {
 
   addChatMessage(prompt, false);
   chatbox.value = '';
-  showLoader();
+
 
   try {
     const csrfToken = getCSRFToken();
@@ -1971,7 +1955,6 @@ sendPromptBtn.addEventListener('click', async () => {
     console.error('Chat error:', e);
     addChatMessage('Error: Network or server issue', true);
   } finally {
-    hideLoader();
   }
 });
 
@@ -2047,40 +2030,3 @@ function setCustomLayerOpacity(opacity) {
     }
   });
 }
-
-
-document.getElementById('generate-mockup-btn').addEventListener('click', async () => {
-  const prompt = document.getElementById('mockup-prompt').value;
-  const mockupImageContainer = document.getElementById('mockup-image-container');
-
-  mockupImageContainer.innerHTML = `<div class="text-sm text-gray-400">Generating...</div>`;
-
-  try {
-    const response = await fetch("/api/generate-image/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: prompt })
-    });
-
-    if (!response.ok) {
-      throw new Error("Server error: " + response.status);
-    }
-
-    const data = await response.json();
-
-    if (data.image_url) {
-      mockupImageContainer.innerHTML = `
-        <img src="${data.image_url}" class="max-w-full max-h-[40vh] object-contain rounded shadow-md mx-auto" />
-        <p class="text-xs mt-1 text-gray-400">Generated using Replicate</p>
-      `;
-    } else if (data.error) {
-      mockupImageContainer.innerHTML = `<div class="text-red-500">Error: ${data.error}</div>`;
-    } else {
-      mockupImageContainer.innerHTML = `<div class="text-red-500">Unexpected response format.</div>`;
-    }
-  } catch (err) {
-    console.error(err);
-    mockupImageContainer.innerHTML = `<div class="text-red-500">Error: ${err.message}</div>`;
-  }
-});
-
